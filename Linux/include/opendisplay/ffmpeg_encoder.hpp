@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opendisplay/types.hpp"
+#include "opendisplay/video_encoder.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -15,15 +16,6 @@
 
 namespace od {
 
-struct EncoderConfig {
-    EncoderKind kind = EncoderKind::Auto;
-    std::string vaapiDevice = "/dev/dri/renderD128";
-    int outputWidth = 0;
-    int outputHeight = 0;
-    int fps = 60;
-    int bitrate = 18'000'000;
-};
-
 /// FFmpeg filter chain that fits the captured frame into width x height,
 /// preserving aspect ratio and padding with black (never stretching). VA-API
 /// additionally converts to NV12 and uploads to the GPU.
@@ -31,20 +23,18 @@ std::string encoderVideoFilter(EncoderKind kind, int width, int height);
 
 /// Low-latency FFmpeg subprocess adapter. Capture threads only replace a
 /// single pending frame, preventing latency from growing under encoder load.
-class FfmpegEncoder {
+class FfmpegEncoder final : public VideoEncoder {
 public:
-    using FrameCallback = std::function<void(EncodedFrame)>;
-
     FfmpegEncoder() = default;
-    ~FfmpegEncoder();
+    ~FfmpegEncoder() override;
     FfmpegEncoder(const FfmpegEncoder&) = delete;
     FfmpegEncoder& operator=(const FfmpegEncoder&) = delete;
 
-    void start(EncoderConfig config, FrameCallback callback);
-    void submit(CapturedFrame frame);
-    void requestKeyframe();
-    void stop();
-    [[nodiscard]] std::string selectedEncoder() const;
+    void start(EncoderConfig config, FrameCallback callback) override;
+    void submit(CapturedFrame frame) override;
+    void requestKeyframe() override;
+    void stop() override;
+    [[nodiscard]] std::string selectedEncoder() const override;
 
 private:
     void run();

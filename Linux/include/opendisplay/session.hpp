@@ -1,7 +1,7 @@
 #pragma once
 
 #include "opendisplay/desktop_backend.hpp"
-#include "opendisplay/ffmpeg_encoder.hpp"
+#include "opendisplay/video_encoder.hpp"
 #include "opendisplay/latency_stats.hpp"
 #include "opendisplay/pipewire_capture.hpp"
 #include "opendisplay/socket.hpp"
@@ -71,7 +71,7 @@ private:
     Socket socket_;
     std::unique_ptr<DesktopBackend> desktop_;
     PipeWireCapture capture_;
-    FfmpegEncoder encoder_;
+    std::unique_ptr<VideoEncoder> encoder_ = makeVideoEncoder();
     std::thread receiver_;
     std::atomic_bool connected_ = false;
     std::mutex sendMutex_;

@@ -86,7 +86,7 @@ void Session::startPipeline(const PhoneInfo& phone) {
     }
     bool pipewireFdHandedOff = false;
     try {
-        encoder_.start(EncoderConfig{
+        encoder_->start(EncoderConfig{
             .kind = options_.encoder,
             .vaapiDevice = options_.vaapiDevice,
             .outputWidth = outputWidth,
@@ -107,7 +107,7 @@ void Session::startPipeline(const PhoneInfo& phone) {
         pipewireFdHandedOff = true;
         capture_.start(capture.pipewireFd, capture.stream.nodeId, capture.captureWidth,
                        capture.captureHeight, options_.fps, [this](CapturedFrame frame) {
-                           encoder_.submit(std::move(frame));
+                           encoder_->submit(std::move(frame));
                        });
         pipelineRunning_ = true;
         activePhone_ = phone;
@@ -117,7 +117,7 @@ void Session::startPipeline(const PhoneInfo& phone) {
         if (!pipewireFdHandedOff) {
             ::close(capture.pipewireFd);
         }
-        encoder_.stop();
+        encoder_->stop();
         desktop_->stop();
         throw;
     }
@@ -125,7 +125,7 @@ void Session::startPipeline(const PhoneInfo& phone) {
 
 void Session::stopPipeline() {
     capture_.stop();
-    encoder_.stop();
+    encoder_->stop();
     desktop_->stop();
     pipelineRunning_ = false;
 }
@@ -196,7 +196,7 @@ void Session::receiveLoop() {
                         .y = object->value(QStringLiteral("dy")).toDouble()});
         } else if (type == QStringLiteral("kf")) {
             log("Receiver requested a keyframe");
-            encoder_.requestKeyframe();
+            encoder_->requestKeyframe();
         } else if (type == QStringLiteral("stats")) {
             const auto now = wallClockMs();
             if (verboseLogging || now - lastReceiverStatsLogMs_ >= 5'000) {
@@ -309,7 +309,7 @@ std::pair<std::uint64_t, SessionStats> Session::stats() const {
     return {statsSerial_, stats_};
 }
 
-std::string Session::encoderName() const { return encoder_.selectedEncoder(); }
+std::string Session::encoderName() const { return encoder_->selectedEncoder(); }
 
 void Session::stop() {
     stopPipeline();

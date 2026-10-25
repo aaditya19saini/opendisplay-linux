@@ -94,7 +94,7 @@ struct Options {
     std::uint16_t port = 9000;
     std::string serviceName;
     std::string udid;
-    std::string vaapiDevice = "/dev/dri/renderD128";
+    std::string vaapiDevice;  // empty: first render node that can encode
     int fps = 60;
     int bitrate = 18'000'000;
     double scale = 1.0;

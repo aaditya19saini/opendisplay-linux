@@ -110,6 +110,10 @@ void FfmpegEncoder::start(EncoderConfig config, FrameCallback callback) {
     std::signal(SIGPIPE, SIG_IGN);
     config_ = std::move(config);
     callback_ = std::move(callback);
+    if (config_.vaapiDevice.empty()) {
+        const auto nodes = vaapiEncodeCandidates();
+        if (!nodes.empty()) config_.vaapiDevice = nodes.front();
+    }
     selected_ = chooseEncoder();
     log("Using FFmpeg encoder " + encoderName(selected_));
     {

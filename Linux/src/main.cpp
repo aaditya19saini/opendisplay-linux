@@ -170,8 +170,8 @@ int main(int argc, char* argv[]) {
         "FFmpeg encoder: auto, vaapi, nvenc, or software.", "encoder", "auto");
     const QCommandLineOption compositorOption("compositor",
         "Desktop backend: auto, kde, or hyprland.", "name", "auto");
-    const QCommandLineOption vaapiOption("vaapi-device", "VA-API render node.", "path",
-                                         "/dev/dri/renderD128");
+    const QCommandLineOption vaapiOption("vaapi-device",
+        "VA-API render node (default: first non-NVIDIA node).", "path");
     const QCommandLineOption fpsOption("fps", "Maximum frame rate.", "fps", "60");
     const QCommandLineOption bitrateOption("bitrate", "H.264 bitrate in bits/second.",
                                             "bps", "18000000");

@@ -17,6 +17,7 @@ pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
 pkg_check_modules(AVAHI REQUIRED IMPORTED_TARGET avahi-client)
 pkg_check_modules(USBMUXD REQUIRED IMPORTED_TARGET libusbmuxd-2.0)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavutil libswscale)
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 
 set(OPENDISPLAY_BUILD_GUI AUTO CACHE STRING
@@ -45,6 +46,8 @@ set(OPENDISPLAY_CORE_SOURCES
     include/opendisplay/xdg_portal.hpp
     ${VIRTUAL_POINTER_HEADER}
     ${VIRTUAL_POINTER_CODE}
+    src/annexb.cpp
+    src/av_encoder.cpp
     src/desktop_backend_factory.cpp
     src/display_layout.cpp
     src/discovery.cpp
@@ -77,6 +80,7 @@ target_link_libraries(opendisplay-core PUBLIC
     PkgConfig::AVAHI
     PkgConfig::USBMUXD
     PkgConfig::WAYLAND
+    PkgConfig::FFMPEG
     Threads::Threads
 )
 
@@ -223,11 +227,13 @@ if(BUILD_TESTING)
 
     add_executable(opendisplay-encoder-tests
         tests/encoder_tests.cpp
+        src/annexb.cpp
+        src/av_encoder.cpp
         src/ffmpeg_encoder.cpp
         src/wire.cpp
     )
     target_include_directories(opendisplay-encoder-tests PRIVATE include)
-    target_link_libraries(opendisplay-encoder-tests PRIVATE Qt6::Core Threads::Threads)
+    target_link_libraries(opendisplay-encoder-tests PRIVATE Qt6::Core PkgConfig::FFMPEG Threads::Threads)
     target_compile_options(opendisplay-encoder-tests PRIVATE -UNDEBUG)
     add_test(NAME encoder COMMAND opendisplay-encoder-tests)
     set_tests_properties(encoder PROPERTIES TIMEOUT 15)

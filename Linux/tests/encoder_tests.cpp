@@ -1,3 +1,5 @@
+#include "opendisplay/annexb.hpp"
+#include "opendisplay/av_encoder.hpp"
 #include "opendisplay/ffmpeg_encoder.hpp"
 #include "opendisplay/wire.hpp"
 
@@ -47,12 +49,10 @@ void buildsLetterboxFilter() {
     assert(vaapi.find("pad=") < vaapi.find("format=nv12,hwupload"));
 }
 
-int main() {
-    buildsLetterboxFilter();
+void encodesLetterboxedFrames(od::VideoEncoder& encoder) {
     std::mutex mutex;
     std::condition_variable condition;
     std::vector<od::EncodedFrame> output;
-    od::FfmpegEncoder encoder;
     encoder.start(od::EncoderConfig{
         .kind = od::EncoderKind::Software,
         .outputWidth = 64,
@@ -91,6 +91,58 @@ int main() {
     assert(hasNalType(output.front().annexB, 5));  // IDR slice
     for (const auto& encoded : output) {
         assert(hasOnlyFourByteStartCodes(encoded.annexB));
+    }
+}
+
+void normalizesAccessUnits() {
+    std::string params;
+    // 3-byte start codes, a filler NAL, no AUD: SPS, PPS, IDR, filler.
+    const std::string packet = std::string("\0\0\1\x67\x42", 5) + std::string("\0\0\1\x68\xce", 5)
+        + std::string("\0\0\1\x65\x88", 5) + std::string("\0\0\1\x0c\xff", 5);
+    const auto unit = od::normalizeAccessUnit(packet, params);
+    assert(unit.keyframe);
+    assert(unit.bytes.starts_with(std::string("\0\0\0\1\x09\xf0", 6)));
+    assert(hasOnlyFourByteStartCodes(unit.bytes));
+    assert(hasNalType(unit.bytes, 7) && hasNalType(unit.bytes, 8) && hasNalType(unit.bytes, 5));
+    assert(!hasNalType(unit.bytes, 12));
+    assert(params == std::string("\0\0\0\1\x67\x42\0\0\0\1\x68\xce", 12));
+
+    // A later IDR without parameter sets gets the cached ones prepended.
+    const auto idr = od::normalizeAccessUnit(std::string("\0\0\0\1\x65\x99", 6), params);
+    assert(idr.keyframe && hasNalType(idr.bytes, 7) && hasNalType(idr.bytes, 8));
+    assert(idr.bytes.find(std::string("\x09\xf0", 2)) == 4);  // AUD still first
+
+    // A P-frame stays small: AUD + slice, existing AUD not duplicated.
+    const auto p = od::normalizeAccessUnit(std::string("\0\0\0\1\x09\x10\0\0\0\1\x41\x9a", 12), params);
+    assert(!p.keyframe && !hasNalType(p.bytes, 7));
+    assert(p.bytes == std::string("\0\0\0\1\x09\xf0\0\0\0\1\x41\x9a", 12));
+}
+
+void computesLetterbox() {
+    const auto wide = od::letterboxRect(1920, 1080, 2224, 1668);  // 16:9 into 4:3
+    assert(wide.width == 2224 && wide.x == 0);
+    assert(wide.height == 1250 && wide.y == 208);
+    const auto tall = od::letterboxRect(1000, 2000, 2000, 2000);
+    assert(tall.height == 2000 && tall.width == 1000 && tall.x == 500 && tall.y == 0);
+    const auto same = od::letterboxRect(2224, 1668, 2224, 1668);
+    assert(same.x == 0 && same.y == 0 && same.width == 2224 && same.height == 1668);
+    for (const auto r : {wide, tall, same}) {
+        assert(r.x % 2 == 0 && r.y % 2 == 0 && r.width % 2 == 0 && r.height % 2 == 0);
+    }
+}
+
+int main() {
+    buildsLetterboxFilter();
+    normalizesAccessUnits();
+    computesLetterbox();
+    {
+        od::FfmpegEncoder subprocess;
+        encodesLetterboxedFrames(subprocess);
+    }
+    {
+        od::AvEncoder inProcess;
+        encodesLetterboxedFrames(inProcess);
+        assert(inProcess.selectedEncoder() == "libx264");
     }
     return 0;
 }
