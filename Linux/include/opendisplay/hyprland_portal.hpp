@@ -1,6 +1,7 @@
 #pragma once
 
 #include "opendisplay/desktop_backend.hpp"
+#include "opendisplay/hyprland_events.hpp"
 #include "opendisplay/hyprland_output_controller.hpp"
 #include "opendisplay/wayland_virtual_pointer.hpp"
 #include "opendisplay/xdg_portal.hpp"
@@ -27,6 +28,7 @@ public:
 private:
     XdgPortal portal_;
     HyprlandOutputController outputs_;
+    HyprlandEventWatcher events_;
     WaylandVirtualPointer pointer_;
     QString sessionPath_;
     std::string virtualOutputName_;

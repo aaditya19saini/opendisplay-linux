@@ -91,7 +91,12 @@ void Session::startPipeline(const PhoneInfo& phone) {
             if (frame.annexB.empty() || !wire::containsAnnexBStartCode(frame.annexB)) {
                 return;
             }
-            send(wire::videoPayload(frame, wallClockMs()));
+            const auto encodedAt = wallClockMs();
+            encodeLatency_.add(encodedAt, encodedAt - frame.capturedAtMs);
+            if (send(wire::videoPayload(frame, encodedAt))) {
+                const auto sentAt = wallClockMs();
+                sendLatency_.add(sentAt, sentAt - frame.capturedAtMs);
+            }
         });
         pipewireFdHandedOff = true;
         capture_.start(capture.pipewireFd, capture.stream.nodeId, capture.captureWidth,
@@ -187,8 +192,12 @@ void Session::receiveLoop() {
             log("Receiver requested a keyframe");
             encoder_.requestKeyframe();
         } else if (type == QStringLiteral("stats")) {
-            debug("Receiver stats: "
-                  + QJsonDocument(*object).toJson(QJsonDocument::Compact).toStdString());
+            const auto now = wallClockMs();
+            if (verboseLogging || now - lastReceiverStatsLogMs_ >= 5'000) {
+                lastReceiverStatsLogMs_ = now;
+                log("Receiver stats: "
+                    + QJsonDocument(*object).toJson(QJsonDocument::Compact).toStdString());
+            }
         } else if (type == QStringLiteral("sleeping") || type == QStringLiteral("closing")) {
             log(type == QStringLiteral("sleeping") ? "Receiver went to sleep"
                                                     : "Receiver app closed");
@@ -226,6 +235,15 @@ bool Session::tick() {
             }
             phone_ = event.phone;
         }
+    }
+
+    const auto nowMs = wallClockMs();
+    const auto encoded = encodeLatency_.take(nowMs);
+    const auto sent = sendLatency_.take(nowMs);
+    if (verboseLogging && encoded && sent && sent->count > 0) {
+        log("Sender latency over " + std::to_string(sent->count) + " frames ("
+            + std::to_string(sent->count / 5) + " fps): capture->encoded "
+            + formatLatency(*encoded) + "; capture->sent " + formatLatency(*sent));
     }
 
     const auto now = std::chrono::steady_clock::now();

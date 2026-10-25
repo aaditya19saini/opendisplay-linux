@@ -24,6 +24,11 @@ struct EncoderConfig {
     int bitrate = 18'000'000;
 };
 
+/// FFmpeg filter chain that fits the captured frame into width x height,
+/// preserving aspect ratio and padding with black (never stretching). VA-API
+/// additionally converts to NV12 and uploads to the GPU.
+std::string encoderVideoFilter(EncoderKind kind, int width, int height);
+
 /// Low-latency FFmpeg subprocess adapter. Capture threads only replace a
 /// single pending frame, preventing latency from growing under encoder load.
 class FfmpegEncoder {

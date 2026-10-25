@@ -2,6 +2,7 @@
 
 #include "opendisplay/desktop_backend.hpp"
 #include "opendisplay/ffmpeg_encoder.hpp"
+#include "opendisplay/latency_stats.hpp"
 #include "opendisplay/pipewire_capture.hpp"
 #include "opendisplay/socket.hpp"
 #include "opendisplay/types.hpp"
@@ -61,6 +62,10 @@ private:
     std::deque<Event> events_;
     std::chrono::steady_clock::time_point lastPing_{};
     std::chrono::steady_clock::time_point reconfigureAfter_{};
+    // Capture -> encoded access unit, and capture -> written to the socket.
+    LatencyWindow encodeLatency_;
+    LatencyWindow sendLatency_;
+    std::int64_t lastReceiverStatsLogMs_ = 0;
     bool pipelineRunning_ = false;
     bool reconfigurePending_ = false;
 };

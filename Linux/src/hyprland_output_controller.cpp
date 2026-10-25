@@ -176,6 +176,66 @@ std::vector<DisplayOutput> HyprlandOutputController::outputs() const {
     return parseHyprlandOutputs(result.output);
 }
 
+std::string HyprlandOutputController::applyRule(const std::string& name,
+                                                const DisplayLayout& ruleLayout,
+                                                const int transform) const {
+    const auto expression = hyprlandMonitorExpression(name, ruleLayout, transform);
+    const auto luaResult = hyprctl({QStringLiteral("eval"),
+                                    QString::fromStdString(expression)});
+    debug("Hyprland Lua monitor-rule response for " + name + ": "
+          + (luaResult.output.empty() ? std::string("<empty>") : luaResult.output));
+
+    CommandResult ruleResult = luaResult;
+    std::string ruleMethod = "Lua hl.monitor";
+    if (!hyprlandCommandResponseAccepted(luaResult.success, luaResult.output)) {
+        const auto& geometry = ruleLayout.logicalGeometry;
+        QString legacy = QStringLiteral("%1,%2x%3@%4,%5x%6,%7")
+            .arg(QString::fromStdString(name))
+            .arg(ruleLayout.resolution.width)
+            .arg(ruleLayout.resolution.height)
+            .arg(ruleLayout.refreshRate)
+            .arg(geometry.x)
+            .arg(geometry.y)
+            .arg(QString::fromStdString(scaleText(ruleLayout.scale)));
+        if (transform >= 0) {
+            legacy += QStringLiteral(",transform,%1").arg(transform);
+        }
+        ruleResult = hyprctl({QStringLiteral("keyword"), QStringLiteral("monitor"),
+                              legacy});
+        ruleMethod = "legacy keyword monitor";
+        debug("Hyprland legacy monitor-rule response for " + name + ": "
+              + (ruleResult.output.empty() ? std::string("<empty>")
+                                           : ruleResult.output));
+    }
+    if (!hyprlandCommandResponseAccepted(ruleResult.success, ruleResult.output)) {
+        const auto version = hyprctl({QStringLiteral("version")});
+        throw std::runtime_error(
+            "Hyprland could not install monitor rule for '" + name
+            + "'. Lua response: '" + luaResult.output + "'; legacy response: '"
+            + ruleResult.output + "'; version: " + version.output);
+    }
+    return ruleMethod;
+}
+
+std::string HyprlandOutputController::pinReference(const DisplayOutput& reference) const {
+    DisplayLayout referenceLayout;
+    referenceLayout.resolution = reference.resolution;
+    referenceLayout.scale = reference.scale;
+    referenceLayout.logicalGeometry = reference.logicalGeometry;
+    referenceLayout.refreshRate = std::max(
+        1, static_cast<int>(std::lround(reference.refreshRate)));
+    return applyRule(reference.name, referenceLayout, reference.transform);
+}
+
+void HyprlandOutputController::reapply(const std::string& outputName,
+                                       const DisplayLayout& layout,
+                                       const DisplayOutput& reference) const {
+    pinReference(reference);
+    const auto method = applyRule(outputName, layout, -1);
+    log("Re-applied monitor rules for " + outputName + " and " + reference.name
+        + " after a Hyprland config reload (" + method + ")");
+}
+
 DisplayOutput HyprlandOutputController::create(const std::string& outputName,
                                                const DisplayLayout& layout,
                                                const DisplayOutput& detectedReference) const {
@@ -183,66 +243,19 @@ DisplayOutput HyprlandOutputController::create(const std::string& outputName,
         throw std::runtime_error("Hyprland output '" + outputName + "' already exists");
     }
 
-    auto installRule = [&](const std::string& name, const DisplayLayout& ruleLayout,
-                           const int transform) {
-        const auto expression = hyprlandMonitorExpression(name, ruleLayout, transform);
-        const auto luaResult = hyprctl({QStringLiteral("eval"),
-                                        QString::fromStdString(expression)});
-        debug("Hyprland Lua monitor-rule response for " + name + ": "
-              + (luaResult.output.empty() ? std::string("<empty>") : luaResult.output));
-
-        CommandResult ruleResult = luaResult;
-        std::string ruleMethod = "Lua hl.monitor";
-        if (!hyprlandCommandResponseAccepted(luaResult.success, luaResult.output)) {
-            const auto& geometry = ruleLayout.logicalGeometry;
-            QString legacy = QStringLiteral("%1,%2x%3@%4,%5x%6,%7")
-                .arg(QString::fromStdString(name))
-                .arg(ruleLayout.resolution.width)
-                .arg(ruleLayout.resolution.height)
-                .arg(ruleLayout.refreshRate)
-                .arg(geometry.x)
-                .arg(geometry.y)
-                .arg(QString::fromStdString(scaleText(ruleLayout.scale)));
-            if (transform >= 0) {
-                legacy += QStringLiteral(",transform,%1").arg(transform);
-            }
-            ruleResult = hyprctl({QStringLiteral("keyword"), QStringLiteral("monitor"),
-                                  legacy});
-            ruleMethod = "legacy keyword monitor";
-            debug("Hyprland legacy monitor-rule response for " + name + ": "
-                  + (ruleResult.output.empty() ? std::string("<empty>")
-                                               : ruleResult.output));
-        }
-        if (!hyprlandCommandResponseAccepted(ruleResult.success, ruleResult.output)) {
-            const auto version = hyprctl({QStringLiteral("version")});
-            throw std::runtime_error(
-                "Hyprland could not install monitor rule for '" + name
-                + "'. Lua response: '" + luaResult.output + "'; legacy response: '"
-                + ruleResult.output + "'; version: " + version.output);
-        }
-        return ruleMethod;
-    };
-
     // Hyprland re-arranges outputs whose user rule uses an automatic position
     // whenever another output is hot-plugged. Pin the detected reference to its
     // current state so the new explicit output cannot become the layout anchor.
-    DisplayLayout referenceLayout;
-    referenceLayout.resolution = detectedReference.resolution;
-    referenceLayout.scale = detectedReference.scale;
-    referenceLayout.logicalGeometry = detectedReference.logicalGeometry;
-    referenceLayout.refreshRate = std::max(
-        1, static_cast<int>(std::lround(detectedReference.refreshRate)));
-    const auto referenceMethod = installRule(detectedReference.name, referenceLayout,
-                                             detectedReference.transform);
+    const auto referenceMethod = pinReference(detectedReference);
     debug("Pinned reference monitor " + detectedReference.name + " at "
-          + std::to_string(referenceLayout.logicalGeometry.x) + 'x'
-          + std::to_string(referenceLayout.logicalGeometry.y) + " through "
+          + std::to_string(detectedReference.logicalGeometry.x) + 'x'
+          + std::to_string(detectedReference.logicalGeometry.y) + " through "
           + referenceMethod);
 
     // Install the exact-name rule before hot-plugging the headless output. This
     // lets Hyprland select the custom mode during its initial output commit,
     // rather than briefly committing the backend's default 1920x1080 mode.
-    const auto ruleMethod = installRule(outputName, layout, -1);
+    const auto ruleMethod = applyRule(outputName, layout, -1);
 
     const auto result = hyprctl({QStringLiteral("output"), QStringLiteral("create"),
                                  QStringLiteral("headless"),

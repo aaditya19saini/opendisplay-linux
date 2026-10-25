@@ -34,7 +34,21 @@ bool hasNalType(const std::string_view bytes, const unsigned char type) {
 
 }  // namespace
 
+void buildsLetterboxFilter() {
+    const auto software = od::encoderVideoFilter(od::EncoderKind::Software, 2224, 1668);
+    assert(software.find("scale=2224:1668:force_original_aspect_ratio=decrease")
+           != std::string::npos);
+    assert(software.find("pad=2224:1668:(ow-iw)/2:(oh-ih)/2") != std::string::npos);
+    assert(software.find("hwupload") == std::string::npos);
+    assert(od::encoderVideoFilter(od::EncoderKind::Nvenc, 64, 64).find("hwupload")
+           == std::string::npos);
+    const auto vaapi = od::encoderVideoFilter(od::EncoderKind::Vaapi, 64, 64);
+    // Pad before the NV12 conversion and upload.
+    assert(vaapi.find("pad=") < vaapi.find("format=nv12,hwupload"));
+}
+
 int main() {
+    buildsLetterboxFilter();
     std::mutex mutex;
     std::condition_variable condition;
     std::vector<od::EncodedFrame> output;
@@ -55,11 +69,12 @@ int main() {
 
     for (int index = 0; index < 8; ++index) {
         od::CapturedFrame frame;
-        frame.format = od::VideoFormat{.width = 64, .height = 64, .stride = 256,
+        // A 2:1 frame into a 1:1 output exercises the letterbox path.
+        frame.format = od::VideoFormat{.width = 64, .height = 32, .stride = 256,
                                        .fps = 30};
         frame.capturedAtMs = 1000 + index;
         frame.sequence = static_cast<unsigned>(index);
-        frame.bytes.assign(64 * 64 * 4, static_cast<char>(index * 20));
+        frame.bytes.assign(64 * 32 * 4, static_cast<char>(index * 20));
         encoder.submit(std::move(frame));
         std::this_thread::sleep_for(std::chrono::milliseconds(40));
     }

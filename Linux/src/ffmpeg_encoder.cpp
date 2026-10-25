@@ -93,6 +93,16 @@ std::size_t findStartCode(const std::string_view bytes, const std::size_t from) 
 
 }  // namespace
 
+std::string encoderVideoFilter(const EncoderKind kind, const int width, const int height) {
+    const auto w = std::to_string(width);
+    const auto h = std::to_string(height);
+    std::string filter = "scale=" + w + ':' + h
+        + ":force_original_aspect_ratio=decrease:force_divisible_by=2:flags=fast_bilinear"
+          ",pad=" + w + ':' + h + ":(ow-iw)/2:(oh-ih)/2:color=black";
+    if (kind == EncoderKind::Vaapi) filter += ",format=nv12,hwupload";
+    return filter;
+}
+
 FfmpegEncoder::~FfmpegEncoder() { stop(); }
 
 void FfmpegEncoder::start(EncoderConfig config, FrameCallback callback) {
@@ -170,9 +180,11 @@ std::vector<std::string> FfmpegEncoder::arguments(const VideoFormat& input) cons
     const int outputWidth = config_.outputWidth > 0 ? config_.outputWidth : input.width;
     const int outputHeight = config_.outputHeight > 0 ? config_.outputHeight : input.height;
     const std::string size = std::to_string(input.width) + "x" + std::to_string(input.height);
-    const std::string rate = std::to_string(std::max(1, config_.fps));
+    // PipeWire reports 0/1 for damage-driven (variable-rate) capture.
+    const std::string rate = std::to_string(std::max(1, input.fps > 0 ? input.fps : config_.fps));
     std::vector<std::string> args{
         "ffmpeg", "-hide_banner", "-loglevel", "warning", "-nostdin",
+        "-fflags", "nobuffer",
     };
     if (selected_ == EncoderKind::Vaapi) {
         args.insert(args.end(), {"-vaapi_device", config_.vaapiDevice});
@@ -182,15 +194,14 @@ std::vector<std::string> FfmpegEncoder::arguments(const VideoFormat& input) cons
         "-video_size", size, "-framerate", rate, "-i", "pipe:0", "-an",
     });
 
-    const std::string scale = "scale=" + std::to_string(outputWidth) + ':'
-        + std::to_string(outputHeight) + ":flags=fast_bilinear";
+    const std::string filter = encoderVideoFilter(selected_, outputWidth, outputHeight);
     if (selected_ == EncoderKind::Vaapi) {
-        args.insert(args.end(), {"-vf", scale + ",format=nv12,hwupload", "-c:v", "h264_vaapi"});
+        args.insert(args.end(), {"-vf", filter, "-c:v", "h264_vaapi"});
     } else if (selected_ == EncoderKind::Nvenc) {
-        args.insert(args.end(), {"-vf", scale, "-c:v", "h264_nvenc", "-preset", "p1",
-                                 "-tune", "ull", "-delay", "0"});
+        args.insert(args.end(), {"-vf", filter, "-c:v", "h264_nvenc", "-preset", "p1",
+                                 "-tune", "ull", "-delay", "0", "-zerolatency", "1"});
     } else {
-        args.insert(args.end(), {"-vf", scale, "-c:v", "libx264", "-preset", "ultrafast",
+        args.insert(args.end(), {"-vf", filter, "-c:v", "libx264", "-preset", "ultrafast",
                                  "-tune", "zerolatency",
                                  "-x264-params", "repeat-headers=1:aud=1"});
     }
@@ -198,7 +209,12 @@ std::vector<std::string> FfmpegEncoder::arguments(const VideoFormat& input) cons
         "-bf", "0", "-g", std::to_string(std::max(config_.fps * 60, config_.fps)),
         "-b:v", std::to_string(config_.bitrate), "-maxrate", std::to_string(config_.bitrate),
         "-bufsize", std::to_string(std::max(config_.bitrate / 2, 1)),
-        "-bsf:v", "h264_metadata=aud=insert,dump_extra=freq=keyframe",
+        "-flags", "low_delay",
+        // Mesa's VA-API encoder emits filler-data NALs (type 12) in CBR mode,
+        // which h264_metadata cannot parse; they carry nothing the receiver needs.
+        "-bsf:v", "filter_units=remove_types=12,h264_metadata=aud=insert,"
+                  "dump_extra=freq=keyframe",
+        "-flush_packets", "1",
         "-f", "h264", "pipe:1",
     });
     return args;

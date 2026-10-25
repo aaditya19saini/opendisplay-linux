@@ -50,6 +50,7 @@ set(OPENDISPLAY_CORE_SOURCES
     src/ffmpeg_encoder.cpp
     src/kde_output_controller.cpp
     src/kde_portal.cpp
+    src/hyprland_events.cpp
     src/hyprland_output_controller.cpp
     src/hyprland_portal.cpp
     src/pipewire_capture.cpp
@@ -188,6 +189,15 @@ if(BUILD_TESTING)
     target_compile_options(opendisplay-encoder-tests PRIVATE -UNDEBUG)
     add_test(NAME encoder COMMAND opendisplay-encoder-tests)
     set_tests_properties(encoder PROPERTIES TIMEOUT 15)
+
+    add_executable(opendisplay-hyprland-events-tests
+        tests/hyprland_events_tests.cpp
+        src/hyprland_events.cpp
+    )
+    target_include_directories(opendisplay-hyprland-events-tests PRIVATE include)
+    target_link_libraries(opendisplay-hyprland-events-tests PRIVATE Threads::Threads)
+    target_compile_options(opendisplay-hyprland-events-tests PRIVATE -UNDEBUG)
+    add_test(NAME hyprland-events COMMAND opendisplay-hyprland-events-tests)
 
     add_executable(opendisplay-pipewire-format-tests
         tests/pipewire_format_tests.cpp

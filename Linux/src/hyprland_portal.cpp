@@ -61,6 +61,28 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
             referencePinned_ = true;
             const auto configured = outputs_.create(virtualOutputName_, layout, reference);
             inputOutputName = configured.name;
+            // Any Hyprland config reload (layout toggles, theme changes, saving the
+            // config) drops runtime monitor rules, and the virtual output then
+            // falls back to the user's catch-all rule (wrong size and scale).
+            // Re-apply our rules after every reload while the session runs.
+            const bool watching = events_.start(
+                [this, name = virtualOutputName_, layout, reference](
+                    const HyprlandEvent& event) {
+                    if (event.name == "configreloaded") {
+                        try {
+                            outputs_.reapply(name, layout, reference);
+                        } catch (const std::exception& error) {
+                            log(std::string("Cannot re-apply monitor rules after a "
+                                            "Hyprland reload: ") + error.what());
+                        }
+                    } else if (event.name == "monitorremoved" && event.data == name) {
+                        log("Hyprland removed the virtual monitor " + name);
+                    }
+                });
+            if (!watching) {
+                log("Hyprland event socket unavailable; a config reload will reset the "
+                    "virtual monitor until the session restarts");
+            }
             captureWidth = layout.resolution.width;
             captureHeight = layout.resolution.height;
             captureLogicalWidth = layout.logicalGeometry.width;
@@ -147,6 +169,9 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
 }
 
 void HyprlandPortal::stop() {
+    // Stop watching first: our own teardown reloads the config, and the
+    // removed output must not get its rules re-applied.
+    events_.stop();
     inputEnabled_ = false;
     pointer_.stop();
     if (!sessionPath_.isEmpty()) {

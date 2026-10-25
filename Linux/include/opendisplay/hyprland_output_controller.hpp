@@ -21,9 +21,18 @@ public:
     DisplayOutput create(const std::string& outputName,
                          const DisplayLayout& layout,
                          const DisplayOutput& detectedReference) const;
+    /// Re-installs the reference pin and the virtual-output rule, e.g. after a
+    /// Hyprland config reload dropped the runtime rules.
+    void reapply(const std::string& outputName, const DisplayLayout& layout,
+                 const DisplayOutput& reference) const;
     void focus(const std::string& outputName) const;
     void remove(const std::string& outputName) const;
     void reload() const;
+
+private:
+    std::string applyRule(const std::string& name, const DisplayLayout& ruleLayout,
+                          int transform) const;
+    std::string pinReference(const DisplayOutput& reference) const;
 };
 
 }  // namespace od
