@@ -10,8 +10,10 @@ made from the GUI, the CLI, or other bars instantly.
   when changed or disconnected), Connect/Disconnect and Autoconnect.
 - **Right click**: switch between extend and mirror (live, no reconnect).
 - **Middle click**: connect or disconnect.
-- Icon: dim tablet when idle, pulsing while connecting or retrying, accent
-  cast icon while extending, mirror icon while mirroring.
+- The widget only appears while a session is active: pulsing while connecting
+  or retrying, accent cast icon while extending, mirror icon while mirroring.
+  It hides when you disconnect; start a session with `opendisplayctl extend`,
+  the GUI, or a keybinding.
 
 ## Install
 

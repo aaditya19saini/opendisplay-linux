@@ -19,6 +19,12 @@ BarWidget {
   property var display: null
   property bool popupOpen: false
 
+  // Only take a bar slot while a session is wanted (connecting, streaming or
+  // retrying); start one with opendisplayctl, the GUI or a keybinding.
+  readonly property bool shown: display !== null && (display.active || display.streaming || display.busy)
+  visible: shown
+  onShownChanged: if (!shown) popupOpen = false
+
   readonly property string status: display ? display.status : "offline"
   readonly property bool streaming: display !== null && display.streaming
   readonly property bool busy: display !== null && display.busy
@@ -57,7 +63,7 @@ BarWidget {
       + " ms (p95 " + stats.sent.p95 + " ms)"
   }
 
-  implicitWidth: icon.implicitWidth + Style.space(14)
+  implicitWidth: shown ? icon.implicitWidth + Style.space(14) : 0
   implicitHeight: barSize
 
   // The service can come up after the bar, so keep asking until it is there.
@@ -73,9 +79,9 @@ BarWidget {
   IpcHandler {
     target: "aaditya.opendisplay"
 
-    function open(): void { root.popupOpen = true }
+    function open(): void { if (root.shown) root.popupOpen = true }
     function close(): void { root.popupOpen = false }
-    function toggle(): void { root.popupOpen = !root.popupOpen }
+    function toggle(): void { root.popupOpen = root.shown && !root.popupOpen }
     function toggleMode(): void { if (root.display) root.display.toggleMode() }
   }
 
