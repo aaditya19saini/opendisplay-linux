@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "aaditya.opendisplay",
+  "name": "OpenDisplay",
+  "version": "1.0.0",
+  "author": "aaditya",
+  "description": "Use an iPad or iPhone as an extra display: connect, switch extend/mirror, and see stream health",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "OpenDisplay",
+    "description": "iPad/iPhone display status with extend/mirror switching",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

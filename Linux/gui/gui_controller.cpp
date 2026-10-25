@@ -10,7 +10,6 @@
 #include <QLocalSocket>
 #include <QMenu>
 #include <QProcess>
-#include <QStyle>
 #include <QSystemTrayIcon>
 #include <QThread>
 #include <QTimer>
@@ -226,11 +225,7 @@ void GuiController::quit() {
 
 void GuiController::createTray() {
     tray_ = new QSystemTrayIcon(this);
-    QIcon trayIcon = QIcon::fromTheme(QStringLiteral("video-display"));
-    if (trayIcon.isNull()) {
-        trayIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    }
-    tray_->setIcon(trayIcon);
+    tray_->setIcon(QIcon(QStringLiteral(":/opendisplay/icon.png")));
     tray_->setToolTip(QStringLiteral("OpenDisplay"));
     trayMenu_ = new QMenu;
     auto* showAction = trayMenu_->addAction(QIcon::fromTheme(QStringLiteral("window")),

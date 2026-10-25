@@ -6,7 +6,6 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QQmlApplicationEngine>
-#include <QStyle>
 #include <QVariant>
 
 #include <unistd.h>
@@ -37,10 +36,8 @@ int main(int argc, char* argv[]) {
     QCoreApplication::setOrganizationName(QStringLiteral("OpenDisplay"));
     QGuiApplication::setDesktopFileName(QStringLiteral("org.opendisplay.desktop"));
     QApplication::setQuitOnLastWindowClosed(false);
-    QIcon applicationIcon = QIcon::fromTheme(QStringLiteral("video-display"));
-    if (applicationIcon.isNull()) {
-        applicationIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    }
+    // Bundled app icon; icon themes often lack a "video-display" entry.
+    const QIcon applicationIcon(QStringLiteral(":/opendisplay/icon.png"));
     QApplication::setWindowIcon(applicationIcon);
 
     od::gui::GuiController controller;

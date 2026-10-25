@@ -126,6 +126,9 @@ target_link_libraries(opendisplayctl PRIVATE Qt6::Core)
 target_compile_options(opendisplayctl PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 install(TARGETS opendisplayctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+install(DIRECTORY integrations/omarchy/
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/opendisplay/integrations/omarchy)
+
 set(OPENDISPLAYD_PATH ${CMAKE_INSTALL_FULL_BINDIR}/opendisplayd)
 configure_file(packaging/systemd/opendisplayd.service.in
     ${CMAKE_CURRENT_BINARY_DIR}/opendisplayd.service @ONLY)
@@ -153,6 +156,11 @@ if(NOT OPENDISPLAY_BUILD_GUI STREQUAL "OFF")
             VERSION 1.0
             NO_IMPORT_SCAN
             QML_FILES gui/qml/Main.qml
+        )
+        set_source_files_properties(../public/icon-256.png PROPERTIES QT_RESOURCE_ALIAS icon.png)
+        qt_add_resources(opendisplay-gui "opendisplay_icons"
+            PREFIX "/opendisplay"
+            FILES ../public/icon-256.png
         )
         target_link_libraries(opendisplay-gui PRIVATE
             opendisplay-core

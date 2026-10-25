@@ -110,9 +110,13 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
                 + std::to_string(layout.resolution.height) + '@'
                 + std::to_string(layout.refreshRate) + ", scale "
                 + std::to_string(layout.scale));
-            log("In the screen-sharing dialog, select monitor " + virtualOutputName_ + '.');
+            if (request.restoreToken.empty()) {
+                log("In the screen-sharing dialog, select monitor " + virtualOutputName_ + '.');
+            }
         } else {
-            log("In the screen-sharing dialog, select monitor " + reference.name + '.');
+            if (request.restoreToken.empty()) {
+                log("In the screen-sharing dialog, select monitor " + reference.name + '.');
+            }
             captureWidth = reference.resolution.width;
             captureHeight = reference.resolution.height;
             captureLogicalWidth = reference.logicalGeometry.width;

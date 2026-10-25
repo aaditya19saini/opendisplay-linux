@@ -79,7 +79,8 @@ Kirigami.ApplicationWindow {
                 spacing: Kirigami.Units.largeSpacing
 
                 Kirigami.Icon {
-                    source: root.controller.connected ? "video-display" : "video-display-symbolic"
+                    source: "qrc:/opendisplay/icon.png"
+                    opacity: root.controller.connected ? 1 : 0.55
                     implicitWidth: Kirigami.Units.iconSizes.huge
                     implicitHeight: implicitWidth
                 }
