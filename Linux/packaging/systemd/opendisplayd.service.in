@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenDisplay sender daemon (iPad/iPhone as an extra display)
+Documentation=https://github.com/aaditya19saini/opendisplay-linux
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@OPENDISPLAYD_PATH@
+Restart=on-failure
+RestartSec=2
+# Give an open share dialog / pipeline teardown time to finish.
+TimeoutStopSec=10
+
+[Install]
+WantedBy=graphical-session.target

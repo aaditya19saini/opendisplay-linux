@@ -98,6 +98,14 @@ Kirigami.ApplicationWindow {
                         color: Kirigami.Theme.disabledTextColor
                         wrapMode: Text.Wrap
                     }
+
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        visible: root.controller.statsText !== ""
+                        text: root.controller.statsText
+                        opacity: 0.7
+                        font: Kirigami.Theme.smallFont
+                    }
                 }
 
                 Controls.BusyIndicator {
@@ -163,6 +171,17 @@ Kirigami.ApplicationWindow {
                         { "text": qsTr("Mirror"), "value": "mirror" }
                     ]
                     Component.onCompleted: root.selectSaved(this, "mode", "extend")
+                    // While streaming, switch live without reconnecting.
+                    onActivated: if (root.controller.connected) root.controller.setMode(currentValue)
+
+                    // Follow mode changes made elsewhere (bar plugin, opendisplayctl).
+                    Connections {
+                        target: root.controller
+                        function onStateChanged() {
+                            const index = modeBox.indexOfValue(root.controller.mode)
+                            if (index >= 0 && index !== modeBox.currentIndex) modeBox.currentIndex = index
+                        }
+                    }
                 }
 
                 Controls.ComboBox {
@@ -312,7 +331,7 @@ Kirigami.ApplicationWindow {
                 Controls.CheckBox {
                     id: verboseCheck
                     Kirigami.FormData.label: qsTr("Diagnostics:")
-                    text: qsTr("Write verbose logs to the terminal")
+                    text: qsTr("Verbose service logs (journalctl --user -u opendisplayd)")
                     checked: root.saved("verbose", false)
                 }
             }

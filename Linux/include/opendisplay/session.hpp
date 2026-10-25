@@ -13,11 +13,20 @@
 #include <deque>
 #include <mutex>
 #include <memory>
+#include <cstdint>
 #include <optional>
+#include <utility>
 #include <string>
 #include <thread>
 
 namespace od {
+
+/// Latest 5-second latency window, as published to control clients.
+struct SessionStats {
+    double fps = 0;
+    LatencySummary encode;
+    LatencySummary sent;
+};
 
 class Session {
 public:
@@ -30,6 +39,17 @@ public:
     /// Called by the Qt main loop. Returns false after disconnection.
     bool tick();
     void stop();
+
+    /// Switches between extend and mirror without dropping the receiver
+    /// connection (rebuilds only the capture pipeline).
+    void switchMode(CaptureMode mode);
+    void setRestoreToken(std::string token);
+    /// Most recent restore token issued by the portal (empty if none).
+    [[nodiscard]] std::string restoreToken() const;
+    [[nodiscard]] std::optional<PhoneInfo> receiver() const;
+    /// (serial, stats); the serial increases each time a new window is ready.
+    [[nodiscard]] std::pair<std::uint64_t, SessionStats> stats() const;
+    [[nodiscard]] std::string encoderName() const;
 
 private:
     enum class EventKind { Hello, Touch, Scroll };
@@ -55,7 +75,11 @@ private:
     std::thread receiver_;
     std::atomic_bool connected_ = false;
     std::mutex sendMutex_;
-    std::mutex stateMutex_;
+    mutable std::mutex stateMutex_;
+    mutable std::mutex statsMutex_;
+    SessionStats stats_;
+    std::uint64_t statsSerial_ = 0;
+    std::string restoreToken_;
     std::condition_variable helloCondition_;
     std::optional<PhoneInfo> phone_;
     std::optional<PhoneInfo> activePhone_;

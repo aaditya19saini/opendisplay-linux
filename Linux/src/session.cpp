@@ -77,7 +77,13 @@ void Session::startPipeline(const PhoneInfo& phone) {
         .display = options_.display,
         .refreshRate = options_.fps,
         .requestInput = options_.input,
+        .virtualOutputName = options_.virtualOutputName,
+        .restoreToken = options_.restoreToken,
     });
+    if (!capture.restoreToken.empty()) {
+        std::lock_guard lock(statsMutex_);
+        restoreToken_ = capture.restoreToken;
+    }
     bool pipewireFdHandedOff = false;
     try {
         encoder_.start(EncoderConfig{
@@ -240,6 +246,12 @@ bool Session::tick() {
     const auto nowMs = wallClockMs();
     const auto encoded = encodeLatency_.take(nowMs);
     const auto sent = sendLatency_.take(nowMs);
+    if (encoded && sent) {
+        std::lock_guard lock(statsMutex_);
+        stats_ = SessionStats{.fps = static_cast<double>(sent->count) / 5.0,
+                              .encode = *encoded, .sent = *sent};
+        statsSerial_ += 1;
+    }
     if (verboseLogging && encoded && sent && sent->count > 0) {
         log("Sender latency over " + std::to_string(sent->count) + " frames ("
             + std::to_string(sent->count / 5) + " fps): capture->encoded "
@@ -268,6 +280,36 @@ bool Session::tick() {
     }
     return connected_.load();
 }
+
+void Session::switchMode(const CaptureMode mode) {
+    if (options_.mode == mode) return;
+    options_.mode = mode;
+    if (!pipelineRunning_ || !activePhone_) return;
+    const auto phone = *activePhone_;
+    log(std::string("Switching to ") + (mode == CaptureMode::Extend ? "extend" : "mirror")
+        + " mode");
+    stopPipeline();
+    startPipeline(phone);
+}
+
+void Session::setRestoreToken(std::string token) { options_.restoreToken = std::move(token); }
+
+std::string Session::restoreToken() const {
+    std::lock_guard lock(statsMutex_);
+    return restoreToken_;
+}
+
+std::optional<PhoneInfo> Session::receiver() const {
+    std::lock_guard lock(stateMutex_);
+    return activePhone_;
+}
+
+std::pair<std::uint64_t, SessionStats> Session::stats() const {
+    std::lock_guard lock(statsMutex_);
+    return {statsSerial_, stats_};
+}
+
+std::string Session::encoderName() const { return encoder_.selectedEncoder(); }
 
 void Session::stop() {
     stopPipeline();

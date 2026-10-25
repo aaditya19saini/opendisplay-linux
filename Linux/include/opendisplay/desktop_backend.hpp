@@ -20,6 +20,8 @@ struct PortalCapture {
     int pipewireFd = -1;
     int captureWidth = 0;
     int captureHeight = 0;
+    /// Token the portal issued for this selection (empty if none).
+    std::string restoreToken;
 };
 
 struct DesktopRequest {
@@ -28,6 +30,8 @@ struct DesktopRequest {
     DisplayOptions display;
     int refreshRate = 60;
     bool requestInput = true;
+    std::string virtualOutputName;
+    std::string restoreToken;
 };
 
 /// Compositor-specific output/capture authorization and input injection.

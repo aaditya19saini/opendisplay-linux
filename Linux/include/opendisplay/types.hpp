@@ -100,6 +100,11 @@ struct Options {
     double scale = 1.0;
     DisplayOptions display;
     bool input = true;
+    /// Stable virtual-output name (e.g. per device) so portal restore tokens
+    /// match across sessions; empty uses a per-process name.
+    std::string virtualOutputName;
+    /// Portal restore token from an earlier session; skips the share dialog.
+    std::string restoreToken;
     bool listDevices = false;
     bool verbose = false;
 };

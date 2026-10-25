@@ -136,7 +136,7 @@ PortalCapture KdePortal::start(const DesktopRequest& desktopRequest) {
         + std::to_string(stream_.logicalHeight));
     return PortalCapture{.sessionPath = sessionPath_.toStdString(), .stream = stream_,
                          .pipewireFd = fd, .captureWidth = captureWidth,
-                         .captureHeight = captureHeight};
+                         .captureHeight = captureHeight, .restoreToken = {}};
 }
 
 void KdePortal::stop() {

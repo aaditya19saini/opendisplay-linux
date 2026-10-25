@@ -1,150 +1,34 @@
 #include "gui_controller.hpp"
 
-#include "session_worker.hpp"
-
-#include "opendisplay/log.hpp"
-#include "opendisplay/types.hpp"
+#include "opendisplay/daemon_support.hpp"
+#include "opendisplay/settings.hpp"
 
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QIcon>
+#include <QLocalSocket>
 #include <QMenu>
-#include <QMetaObject>
-#include <QRegularExpression>
+#include <QProcess>
 #include <QStyle>
 #include <QSystemTrayIcon>
+#include <QThread>
 #include <QTimer>
 
-#include <cmath>
-#include <cstdint>
-#include <stdexcept>
-#include <string>
+#include <exception>
 
 namespace od::gui {
 namespace {
 
-QString text(const QVariantMap& values, const char* key, const char* fallback = "") {
-    return values.value(QString::fromLatin1(key), QString::fromLatin1(fallback))
-        .toString().trimmed();
+QString capitalized(QString text) {
+    if (!text.isEmpty()) text[0] = text[0].toUpper();
+    return text;
 }
 
-od::TransportKind transport(const QString& value) {
-    if (value == QStringLiteral("auto")) return od::TransportKind::Auto;
-    if (value == QStringLiteral("wifi")) return od::TransportKind::Wifi;
-    if (value == QStringLiteral("usb")) return od::TransportKind::Usb;
-    throw std::runtime_error("Transport must be Auto, Wi-Fi, or USB.");
-}
-
-od::CaptureMode mode(const QString& value) {
-    if (value == QStringLiteral("extend")) return od::CaptureMode::Extend;
-    if (value == QStringLiteral("mirror")) return od::CaptureMode::Mirror;
-    throw std::runtime_error("Display mode must be Extend or Mirror.");
-}
-
-od::EncoderKind encoder(const QString& value) {
-    if (value == QStringLiteral("auto")) return od::EncoderKind::Auto;
-    if (value == QStringLiteral("vaapi")) return od::EncoderKind::Vaapi;
-    if (value == QStringLiteral("nvenc")) return od::EncoderKind::Nvenc;
-    if (value == QStringLiteral("software")) return od::EncoderKind::Software;
-    throw std::runtime_error("Encoder must be Auto, VA-API, NVENC, or Software.");
-}
-
-od::CompositorKind compositor(const QString& value) {
-    if (value == QStringLiteral("auto")) return od::CompositorKind::Auto;
-    if (value == QStringLiteral("kde")) return od::CompositorKind::Kde;
-    if (value == QStringLiteral("hyprland")) return od::CompositorKind::Hyprland;
-    throw std::runtime_error("Compositor must be Auto, KDE, or Hyprland.");
-}
-
-od::ExtendDirection extendDirection(const QString& value) {
-    if (value == QStringLiteral("left")) return od::ExtendDirection::Left;
-    if (value == QStringLiteral("right")) return od::ExtendDirection::Right;
-    if (value == QStringLiteral("top")) return od::ExtendDirection::Top;
-    if (value == QStringLiteral("bottom")) return od::ExtendDirection::Bottom;
-    throw std::runtime_error("Extension direction is invalid.");
-}
-
-od::AlignDirection alignDirection(const QString& value) {
-    if (value == QStringLiteral("left")) return od::AlignDirection::Left;
-    if (value == QStringLiteral("right")) return od::AlignDirection::Right;
-    if (value == QStringLiteral("top")) return od::AlignDirection::Top;
-    if (value == QStringLiteral("bottom")) return od::AlignDirection::Bottom;
-    if (value == QStringLiteral("center")) return od::AlignDirection::Center;
-    throw std::runtime_error("Monitor alignment is invalid.");
-}
-
-od::PhysicalSize physicalSize(const QString& value, const char* label) {
-    static const QRegularExpression pattern(
-        QStringLiteral(R"(^([0-9]+(?:\.[0-9]+)?)[xX]([0-9]+(?:\.[0-9]+)?)$)"));
-    const auto match = pattern.match(value);
-    if (!match.hasMatch()) {
-        throw std::runtime_error(std::string(label) + " must use WIDTHxHEIGHT in millimetres.");
-    }
-    return od::PhysicalSize{.widthMm = match.captured(1).toDouble(),
-                            .heightMm = match.captured(2).toDouble()};
-}
-
-od::Size pixelSize(const QString& value) {
-    static const QRegularExpression pattern(QStringLiteral(R"(^(\d+)[xX](\d+)$)"));
-    const auto match = pattern.match(value);
-    if (!match.hasMatch()) {
-        throw std::runtime_error("Virtual resolution must use WIDTHxHEIGHT.");
-    }
-    const od::Size result{.width = match.captured(1).toInt(),
-                          .height = match.captured(2).toInt()};
-    if (result.width < 2 || result.height < 2 || result.width > 65'535
-        || result.height > 65'535) {
-        throw std::runtime_error("Virtual resolution dimensions must be between 2 and 65535.");
-    }
-    return result;
-}
-
-od::Options optionsFrom(const QVariantMap& values) {
-    od::Options options;
-    options.transport = transport(text(values, "transport", "auto"));
-    options.mode = mode(text(values, "mode", "extend"));
-    options.encoder = encoder(text(values, "encoder", "auto"));
-    options.compositor = compositor(text(values, "compositor", "auto"));
-    options.host = text(values, "host").toStdString();
-    options.udid = text(values, "udid").toStdString();
-    options.display.referenceMonitor = text(values, "referenceMonitor").toStdString();
-    options.display.extendTo = extendDirection(text(values, "extendTo", "right"));
-    options.display.alignTo = alignDirection(text(values, "alignTo", "bottom"));
-    options.fps = values.value(QStringLiteral("fps"), 60).toInt();
-    const double bitrateMbps = values.value(QStringLiteral("bitrateMbps"), 18.0).toDouble();
-    options.bitrate = static_cast<int>(std::lround(bitrateMbps * 1'000'000.0));
-    options.input = values.value(QStringLiteral("input"), true).toBool();
-    options.verbose = values.value(QStringLiteral("verbose"), false).toBool();
-
-    if (options.fps < 1 || options.fps > 240) {
-        throw std::runtime_error("Frame rate must be between 1 and 240.");
-    }
-    if (bitrateMbps < 1.0 || bitrateMbps > 200.0) {
-        throw std::runtime_error("Bitrate must be between 1 and 200 Mbps.");
-    }
-    const QString referenceSize = text(values, "referenceSizeMm");
-    if (!referenceSize.isEmpty()) {
-        options.display.referencePhysicalSize = physicalSize(referenceSize, "Reference size");
-    }
-    const QString receiverSize = text(values, "receiverSizeMm");
-    if (!receiverSize.isEmpty()) {
-        options.display.receiverPhysicalSize = physicalSize(receiverSize, "Receiver size");
-    }
-    const QString virtualResolution = text(values, "virtualResolution");
-    if (!virtualResolution.isEmpty()) {
-        options.display.virtualResolution = pixelSize(virtualResolution);
-    }
-    const QString displayScale = text(values, "displayScale");
-    if (!displayScale.isEmpty()) {
-        bool valid = false;
-        const double value = displayScale.toDouble(&valid);
-        if (!valid || value < 0.5 || value > 4.0) {
-            throw std::runtime_error("Display scale must be between 0.5 and 4.0.");
-        }
-        options.display.virtualScale = value;
-    }
-    return options;
+void startDaemon() {
+    QProcess::startDetached(QStringLiteral("systemctl"),
+                            {QStringLiteral("--user"), QStringLiteral("start"),
+                             QStringLiteral("opendisplayd.service")});
 }
 
 }  // namespace
@@ -152,108 +36,192 @@ od::Options optionsFrom(const QVariantMap& values) {
 GuiController::GuiController(QObject* parent)
     : QObject(parent),
       settings_(QStringLiteral("OpenDisplay"), QStringLiteral("OpenDisplay")),
-      worker_(new SessionWorker) {
-    worker_->moveToThread(&workerThread_);
-    connect(&workerThread_, &QThread::finished, worker_, &QObject::deleteLater);
-    connect(worker_, &SessionWorker::stateChanged,
-            this, &GuiController::applyWorkerState);
-    workerThread_.start();
+      watch_(new QLocalSocket(this)), reconnectTimer_(new QTimer(this)) {
+    loadInitialSettings();
     createTray();
+    connect(watch_, &QLocalSocket::connected, this, [this] {
+        buffer_.clear();
+        send({{QStringLiteral("cmd"), QStringLiteral("watch")}});
+    });
+    connect(watch_, &QLocalSocket::readyRead, this, &GuiController::readWatch);
+    connect(watch_, &QLocalSocket::disconnected, this, &GuiController::watchLost);
+    connect(watch_, &QLocalSocket::errorOccurred, this, [this] { watchLost(); });
+    reconnectTimer_->setSingleShot(true);
+    connect(reconnectTimer_, &QTimer::timeout, this, &GuiController::openWatch);
+    openWatch();
 }
 
 GuiController::~GuiController() {
-    if (workerThread_.isRunning()) {
-        QMetaObject::invokeMethod(worker_, &SessionWorker::stop,
-                                  Qt::BlockingQueuedConnection);
-        workerThread_.quit();
-        workerThread_.wait();
-    }
     tray_->setContextMenu(nullptr);
     delete trayMenu_;
     trayMenu_ = nullptr;
 }
 
-QVariantMap GuiController::savedSettings() const {
-    return settings_.value(QStringLiteral("connection")).toMap();
-}
-
-void GuiController::connectDevice(const QVariantMap& values) {
-    if (busy_ || connected_) return;
-    try {
-        auto options = optionsFrom(values);
-        od::verboseLogging = options.verbose;
-        pendingSettings_ = values;
-        status_ = QStringLiteral("Connecting");
-        detail_ = QStringLiteral("Preparing the connection…");
-        busy_ = true;
-        emit stateChanged();
-        QMetaObject::invokeMethod(worker_, [worker = worker_, options = std::move(options)]() mutable {
-            worker->start(std::move(options));
-        }, Qt::QueuedConnection);
-    } catch (const std::exception& error) {
-        setLocalError(QString::fromUtf8(error.what()));
+void GuiController::loadInitialSettings() {
+    // QML reads savedSettings once at load, so fetch the daemon's settings
+    // synchronously (starting the daemon if needed); fall back to the GUI's
+    // own last-used values.
+    savedSettings_ = settings_.value(QStringLiteral("connection")).toMap();
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        QLocalSocket probe;
+        probe.connectToServer(controlSocketPath());
+        if (!probe.waitForConnected(500)) {
+            if (attempt == 0) {
+                startDaemon();
+                QThread::msleep(500);
+            }
+            continue;
+        }
+        probe.write(encodeControlMessage({{QStringLiteral("cmd"), QStringLiteral("status")}}));
+        probe.flush();
+        QByteArray line;
+        while (!line.contains('\n') && probe.waitForReadyRead(1'000)) line += probe.readAll();
+        const auto reply = decodeControlMessage(line);
+        if (!reply) return;
+        const auto state = reply->value(QStringLiteral("state")).toObject();
+        auto merged = state.value(QStringLiteral("settings")).toObject().toVariantMap();
+        merged.insert(QStringLiteral("mode"), state.value(QStringLiteral("mode")).toString());
+        for (auto it = merged.cbegin(); it != merged.cend(); ++it) savedSettings_.insert(it.key(), it.value());
+        return;
     }
 }
 
-void GuiController::connectLast() {
-    QVariantMap values = savedSettings();
-    if (values.isEmpty()) {
-        values.insert(QStringLiteral("transport"), QStringLiteral("auto"));
-        values.insert(QStringLiteral("mode"), QStringLiteral("extend"));
-        values.insert(QStringLiteral("encoder"), QStringLiteral("auto"));
-        values.insert(QStringLiteral("compositor"), QStringLiteral("auto"));
-        values.insert(QStringLiteral("extendTo"), QStringLiteral("right"));
-        values.insert(QStringLiteral("alignTo"), QStringLiteral("bottom"));
-        values.insert(QStringLiteral("fps"), 60);
-        values.insert(QStringLiteral("bitrateMbps"), 18.0);
-        values.insert(QStringLiteral("input"), true);
-    }
-    connectDevice(values);
+void GuiController::openWatch() {
+    if (watch_->state() != QLocalSocket::UnconnectedState) return;
+    watch_->connectToServer(controlSocketPath());
 }
 
-void GuiController::disconnectDevice() {
-    if (!connected_ && !busy_) return;
-    status_ = QStringLiteral("Disconnecting");
-    detail_ = QStringLiteral("Stopping capture and removing the virtual monitor…");
-    busy_ = true;
-    emit stateChanged();
-    QMetaObject::invokeMethod(worker_, &SessionWorker::stop, Qt::QueuedConnection);
-}
-
-void GuiController::quit() {
+void GuiController::watchLost() {
     if (quitting_) return;
-    quitting_ = true;
-    emit quittingChanged();
-    QMetaObject::invokeMethod(worker_, &SessionWorker::stop, Qt::QueuedConnection);
-    QCoreApplication::quit();
+    if (watch_->state() == QLocalSocket::ConnectedState) return;
+    connected_ = false;
+    busy_ = false;
+    status_ = QStringLiteral("Service unavailable");
+    detail_ = QStringLiteral("Waiting for opendisplayd… (systemctl --user status opendisplayd)");
+    connectAction_->setEnabled(false);
+    disconnectAction_->setEnabled(false);
+    emit stateChanged();
+    if (!daemonStartRequested_) {
+        daemonStartRequested_ = true;
+        startDaemon();
+    }
+    watch_->abort();
+    reconnectTimer_->start(1'000);
 }
 
-void GuiController::applyWorkerState(const QString& status, const QString& detail,
-                                     const bool connected, const bool busy) {
-    const bool wasConnected = connected_;
-    status_ = status;
-    detail_ = detail;
-    connected_ = connected;
-    busy_ = busy;
-    if (connected_ && !pendingSettings_.isEmpty()) {
-        settings_.setValue(QStringLiteral("connection"), pendingSettings_);
-        pendingSettings_.clear();
-    } else if (!busy_ && !connected_) {
-        pendingSettings_.clear();
+void GuiController::readWatch() {
+    buffer_ += watch_->readAll();
+    qsizetype newline = 0;
+    while ((newline = buffer_.indexOf('\n')) >= 0) {
+        const auto message = decodeControlMessage(buffer_.left(newline));
+        buffer_.remove(0, newline + 1);
+        if (!message) continue;
+        if (message->contains(QStringLiteral("ok")) && !message->value(QStringLiteral("ok")).toBool()) {
+            setLocalError(message->value(QStringLiteral("error")).toString());
+            continue;
+        }
+        const auto event = message->value(QStringLiteral("event")).toString();
+        if (event == QStringLiteral("stats")) {
+            applyStats(message->value(QStringLiteral("stats")).toObject());
+        } else if (message->contains(QStringLiteral("state"))) {
+            daemonStartRequested_ = false;
+            applyState(message->value(QStringLiteral("state")).toObject());
+        }
     }
-    connectAction_->setEnabled(!connected_ && !busy_);
-    disconnectAction_->setEnabled(connected_ || busy_);
-    tray_->setToolTip(connected_ ? QStringLiteral("OpenDisplay — Connected")
-                                 : QStringLiteral("OpenDisplay — %1").arg(status_));
+}
+
+void GuiController::send(const QJsonObject& request) {
+    if (watch_->state() != QLocalSocket::ConnectedState) {
+        setLocalError(QStringLiteral("The OpenDisplay service is not running."));
+        return;
+    }
+    watch_->write(encodeControlMessage(request));
+    watch_->flush();
+}
+
+void GuiController::applyState(const QJsonObject& state) {
+    const auto status = state.value(QStringLiteral("status")).toString();
+    const bool wasConnected = connected_;
+    connected_ = status == QStringLiteral("streaming");
+    busy_ = status == QStringLiteral("connecting") || status == QStringLiteral("reconnecting");
+    mode_ = state.value(QStringLiteral("mode")).toString(QStringLiteral("extend"));
+    if (connected_) {
+        status_ = QStringLiteral("Connected");
+    } else if (status == QStringLiteral("idle")) {
+        status_ = QStringLiteral("Disconnected");
+    } else {
+        status_ = capitalized(status);
+    }
+    detail_ = state.value(QStringLiteral("detail")).toString();
+    if (connected_) {
+        const auto encoder = state.value(QStringLiteral("encoder")).toString();
+        const auto output = state.value(QStringLiteral("output")).toString();
+        detail_ += QStringLiteral(" · %1 mode").arg(mode_);
+        if (!encoder.isEmpty()) detail_ += QStringLiteral(" · %1").arg(encoder);
+        if (mode_ == QStringLiteral("extend") && !output.isEmpty()) {
+            detail_ += QStringLiteral(" · %1").arg(output);
+        }
+    }
+    if (!connected_ && !busy_) {
+        statsText_.clear();
+        emit statsChanged();
+    }
+    const bool active = state.value(QStringLiteral("active")).toBool();
+    connectAction_->setEnabled(!active);
+    disconnectAction_->setEnabled(active || connected_ || busy_);
+    modeAction_->setText(mode_ == QStringLiteral("extend") ? QStringLiteral("Switch to Mirror")
+                                                           : QStringLiteral("Switch to Extend"));
+    tray_->setToolTip(QStringLiteral("OpenDisplay — %1").arg(status_));
     emit stateChanged();
 
     if (trayAvailable_ && connected_ && !wasConnected) {
         tray_->showMessage(QStringLiteral("OpenDisplay"), detail_,
                            QSystemTrayIcon::Information, 3000);
-    } else if (trayAvailable_ && status_ == QStringLiteral("Connection failed")) {
-        tray_->showMessage(QStringLiteral("OpenDisplay connection failed"), detail_,
-                           QSystemTrayIcon::Warning, 5000);
     }
+}
+
+void GuiController::applyStats(const QJsonObject& stats) {
+    const auto sent = stats.value(QStringLiteral("sent")).toObject();
+    statsText_ = QStringLiteral("%1 fps · capture→sent p50 %2 ms, p95 %3 ms")
+                     .arg(qRound(stats.value(QStringLiteral("fps")).toDouble()))
+                     .arg(sent.value(QStringLiteral("p50")).toInteger())
+                     .arg(sent.value(QStringLiteral("p95")).toInteger());
+    emit statsChanged();
+}
+
+void GuiController::connectDevice(const QVariantMap& values) {
+    try {
+        od::optionsFromSettings(values);  // validate locally for instant feedback
+    } catch (const std::exception& error) {
+        setLocalError(QString::fromUtf8(error.what()));
+        return;
+    }
+    settings_.setValue(QStringLiteral("connection"), values);
+    auto settings = QJsonObject::fromVariantMap(values);
+    const auto mode = settings.take(QStringLiteral("mode")).toString();
+    QJsonObject request{{QStringLiteral("cmd"), QStringLiteral("connect")},
+                        {QStringLiteral("settings"), settings}};
+    if (!mode.isEmpty()) request.insert(QStringLiteral("mode"), mode);
+    send(request);
+}
+
+void GuiController::connectLast() { send({{QStringLiteral("cmd"), QStringLiteral("connect")}}); }
+
+void GuiController::disconnectDevice() {
+    send({{QStringLiteral("cmd"), QStringLiteral("disconnect")}});
+}
+
+void GuiController::setMode(const QString& mode) {
+    if (mode == mode_) return;
+    send({{QStringLiteral("cmd"), QStringLiteral("mode")}, {QStringLiteral("mode"), mode}});
+}
+
+void GuiController::quit() {
+    // Quitting the GUI leaves the daemon (and any stream) running.
+    if (quitting_) return;
+    quitting_ = true;
+    emit quittingChanged();
+    QCoreApplication::quit();
 }
 
 void GuiController::createTray() {
@@ -263,21 +231,25 @@ void GuiController::createTray() {
         trayIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
     }
     tray_->setIcon(trayIcon);
-    tray_->setToolTip(QStringLiteral("OpenDisplay — Disconnected"));
+    tray_->setToolTip(QStringLiteral("OpenDisplay"));
     trayMenu_ = new QMenu;
     auto* showAction = trayMenu_->addAction(QIcon::fromTheme(QStringLiteral("window")),
                                             QStringLiteral("Show OpenDisplay"));
     trayMenu_->addSeparator();
     connectAction_ = trayMenu_->addAction(QStringLiteral("Connect"));
     disconnectAction_ = trayMenu_->addAction(QStringLiteral("Disconnect"));
+    modeAction_ = trayMenu_->addAction(QStringLiteral("Switch to Mirror"));
     disconnectAction_->setEnabled(false);
     trayMenu_->addSeparator();
-    auto* quitAction = trayMenu_->addAction(QStringLiteral("Quit"));
+    auto* quitAction = trayMenu_->addAction(QStringLiteral("Quit window (keeps streaming)"));
     tray_->setContextMenu(trayMenu_);
 
     connect(showAction, &QAction::triggered, this, &GuiController::showWindowRequested);
     connect(connectAction_, &QAction::triggered, this, &GuiController::connectLast);
     connect(disconnectAction_, &QAction::triggered, this, &GuiController::disconnectDevice);
+    connect(modeAction_, &QAction::triggered, this, [this] {
+        send({{QStringLiteral("cmd"), QStringLiteral("toggle-mode")}});
+    });
     connect(quitAction, &QAction::triggered, this, &GuiController::quit);
     connect(tray_, &QSystemTrayIcon::activated, this,
             [this](const QSystemTrayIcon::ActivationReason reason) {
@@ -287,8 +259,6 @@ void GuiController::createTray() {
                 }
             });
 
-    // Keep the icon visible even if the StatusNotifier host starts later. Qt
-    // registers it automatically once a compatible tray becomes available.
     tray_->show();
     trayPoll_ = new QTimer(this);
     trayPoll_->setInterval(2000);
@@ -309,8 +279,6 @@ void GuiController::updateTrayAvailability() {
 void GuiController::setLocalError(const QString& message) {
     status_ = QStringLiteral("Invalid settings");
     detail_ = message;
-    connected_ = false;
-    busy_ = false;
     emit stateChanged();
 }
 

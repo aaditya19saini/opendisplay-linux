@@ -55,8 +55,17 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
                       + std::to_string(layout.resolution.width) + 'x'
                       + std::to_string(layout.resolution.height));
             }
-            virtualOutputName_ = "OpenDisplay-"
-                + std::to_string(QCoreApplication::applicationPid());
+            virtualOutputName_ = !request.virtualOutputName.empty()
+                ? request.virtualOutputName
+                : "OpenDisplay-" + std::to_string(QCoreApplication::applicationPid());
+            // A stable name can be left behind by a crashed session.
+            for (const auto& output : currentOutputs) {
+                if (output.name == virtualOutputName_) {
+                    log("Removing leftover virtual monitor " + virtualOutputName_);
+                    outputs_.remove(virtualOutputName_);
+                    break;
+                }
+            }
             outputCreated_ = true;
             referencePinned_ = true;
             const auto configured = outputs_.create(virtualOutputName_, layout, reference);
@@ -126,6 +135,13 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
         const bool canEmbedCursor = !availableCursorModes.isValid()
             || (availableCursorModes.toUInt() & 2U) != 0;
         sourceOptions.insert(QStringLiteral("cursor_mode"), canEmbedCursor ? 2U : 1U);
+        // Ask for a persistent restore token so later sessions with the same
+        // (stable) output name skip the share dialog.
+        sourceOptions.insert(QStringLiteral("persist_mode"), 2U);
+        if (!request.restoreToken.empty()) {
+            sourceOptions.insert(QStringLiteral("restore_token"),
+                                 QString::fromStdString(request.restoreToken));
+        }
         portal_.request(screenCastInterface, QStringLiteral("SelectSources"),
                         {QVariant::fromValue(QDBusObjectPath(sessionPath_))},
                         std::move(sourceOptions));
@@ -142,6 +158,9 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
             throw std::runtime_error("portal did not return a PipeWire stream");
         }
         auto stream = *parsed;
+        const auto issuedToken = XdgPortal::unwrap(started.value(QStringLiteral("restore_token")))
+                                     .toString().toStdString();
+        if (!issuedToken.empty()) debug("Portal issued a restore token");
         if (request.mode == CaptureMode::Extend) {
             stream.logicalWidth = captureLogicalWidth;
             stream.logicalHeight = captureLogicalHeight;
@@ -161,6 +180,7 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
             .pipewireFd = fd,
             .captureWidth = captureWidth,
             .captureHeight = captureHeight,
+            .restoreToken = issuedToken,
         };
     } catch (...) {
         stop();

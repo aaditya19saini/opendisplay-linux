@@ -70,18 +70,60 @@ pushed branch, not uncommitted files in the current worktree. Push a commit to
 
 ## Run
 
-Open the existing OpenDisplay app on the iOS device, then run:
+Sessions are owned by a small background service, `opendisplayd`, so closing
+or restarting a client never interrupts streaming. Enable it once:
 
 ```sh
-./build/linux/opendisplay-gui
-./build/linux/opendisplay-linux --transport auto --mode extend
+systemctl --user enable --now opendisplayd.service
 ```
 
-The GUI exposes the CLI defaults and common monitor-layout overrides. It uses
-the desktop's StatusNotifier tray when available. On a compositor without a
-compatible tray host it remains a normal launcher window, and closing the
-window exits instead of leaving an invisible background process. On Hyprland,
-a StatusNotifier-capable bar such as Waybar enables tray behavior.
+Open the OpenDisplay app on the iOS device, then control the service with
+`opendisplayctl` (it starts the service on demand) or the GUI:
+
+```sh
+opendisplayctl extend          # connect, or switch live to extend
+opendisplayctl mirror          # connect, or switch live to mirror
+opendisplayctl toggle-mode
+opendisplayctl status          # add --json for scripts
+opendisplayctl watch           # follow state and latency stats
+opendisplayctl disconnect
+opendisplayctl devices
+opendisplayctl set encoder=nvenc fps=60 extendTo=left
+opendisplayctl autoconnect on  # reconnect when the service starts
+opendisplay-gui
+```
+
+Behavior worth knowing:
+
+- The first connection for each device and mode shows the desktop's share
+  dialog. The service saves the portal restore token
+  (`~/.local/state/opendisplay/state.json`, mode 0600), and later connections
+  skip the dialog. Virtual monitors use a stable per-device name
+  (`OpenDisplay-u<udid>` for USB) so the token keeps matching.
+- Switching between extend and mirror rebuilds only the capture pipeline; the
+  receiver stays connected.
+- When the receiver drops (sleep, unplug, app closed) the service retries
+  with exponential backoff until you disconnect. After a crash, systemd
+  restarts it and it resumes the session that was running.
+- Hyprland config reloads (layout toggles, theme changes) no longer reset the
+  virtual monitor: the service re-applies its monitor rules after each reload.
+- Logs: `journalctl --user -u opendisplayd -f`. The GUI's diagnostics checkbox
+  enables verbose logs, including capture-to-send latency every 5 s.
+
+The control socket is `$XDG_RUNTIME_DIR/opendisplay/control.sock` and speaks
+one JSON object per line (`{"cmd":"status"}`, `{"cmd":"connect","mode":"mirror"}`,
+`{"cmd":"watch"}` …), so other front ends such as bar widgets can drive it.
+
+The GUI exposes common settings and monitor-layout overrides, and uses the
+desktop's StatusNotifier tray when available. Quitting the GUI leaves the
+service and any stream running.
+
+The standalone CLI still runs a session in the foreground without the
+service, which is useful for debugging:
+
+```sh
+./build/linux/opendisplay-linux --transport auto --mode extend
+```
 
 The compositor backend is detected automatically; override it with
 `--compositor kde` or `--compositor hyprland`. The first run displays the

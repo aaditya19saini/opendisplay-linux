@@ -6,8 +6,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core DBus Gui)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core DBus Gui Network)
 find_package(KF6Screen 6.3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
@@ -55,7 +56,9 @@ set(OPENDISPLAY_CORE_SOURCES
     src/hyprland_portal.cpp
     src/pipewire_capture.cpp
     src/pipewire_format.cpp
+    src/daemon_support.cpp
     src/session.cpp
+    src/settings.cpp
     src/socket.cpp
     src/wire.cpp
     src/wayland_virtual_pointer.cpp
@@ -96,6 +99,39 @@ target_compile_options(opendisplay-linux PRIVATE
     -Wall -Wextra -Wpedantic -Wconversion -Wshadow
 )
 
+include(GNUInstallDirs)
+
+# Background service that owns sessions; clients talk to its control socket.
+add_executable(opendisplayd
+    daemon/control_server.cpp
+    daemon/control_server.hpp
+    daemon/controller.cpp
+    daemon/controller.hpp
+    daemon/daemon_main.cpp
+    daemon/session_runner.cpp
+    daemon/session_runner.hpp
+)
+target_link_libraries(opendisplayd PRIVATE opendisplay-core Qt6::Network)
+target_compile_options(opendisplayd PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+install(TARGETS opendisplayd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Small control client; deliberately does not link the capture stack.
+add_executable(opendisplayctl
+    ctl/opendisplayctl.cpp
+    src/daemon_support.cpp
+    src/settings.cpp
+)
+target_include_directories(opendisplayctl PRIVATE include)
+target_link_libraries(opendisplayctl PRIVATE Qt6::Core)
+target_compile_options(opendisplayctl PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+install(TARGETS opendisplayctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+set(OPENDISPLAYD_PATH ${CMAKE_INSTALL_FULL_BINDIR}/opendisplayd)
+configure_file(packaging/systemd/opendisplayd.service.in
+    ${CMAKE_CURRENT_BINARY_DIR}/opendisplayd.service @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/opendisplayd.service
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/systemd/user)
+
 if(NOT OPENDISPLAY_BUILD_GUI STREQUAL "OFF")
     find_package(Qt6 6.5 QUIET COMPONENTS Quick Qml QuickControls2 Widgets Network)
     find_package(KF6Kirigami 6.3 QUIET)
@@ -111,8 +147,6 @@ if(NOT OPENDISPLAY_BUILD_GUI STREQUAL "OFF")
             gui/gui_controller.cpp
             gui/gui_controller.hpp
             gui/gui_main.cpp
-            gui/session_worker.cpp
-            gui/session_worker.hpp
         )
         qt_add_qml_module(opendisplay-gui
             URI org.opendisplay.desktop
@@ -199,6 +233,16 @@ if(BUILD_TESTING)
     target_compile_options(opendisplay-hyprland-events-tests PRIVATE -UNDEBUG)
     add_test(NAME hyprland-events COMMAND opendisplay-hyprland-events-tests)
 
+    add_executable(opendisplay-daemon-support-tests
+        tests/daemon_support_tests.cpp
+        src/daemon_support.cpp
+        src/settings.cpp
+    )
+    target_include_directories(opendisplay-daemon-support-tests PRIVATE include)
+    target_link_libraries(opendisplay-daemon-support-tests PRIVATE Qt6::Core)
+    target_compile_options(opendisplay-daemon-support-tests PRIVATE -UNDEBUG)
+    add_test(NAME daemon-support COMMAND opendisplay-daemon-support-tests)
+
     add_executable(opendisplay-pipewire-format-tests
         tests/pipewire_format_tests.cpp
         src/pipewire_format.cpp
@@ -217,6 +261,7 @@ if(BUILD_TESTING)
     target_compile_options(opendisplay-socket-tests PRIVATE -UNDEBUG)
     add_test(NAME socket COMMAND opendisplay-socket-tests)
     set_tests_properties(socket PROPERTIES TIMEOUT 5)
+
 endif()
 
 install(TARGETS opendisplay-linux RUNTIME DESTINATION bin)
