@@ -36,6 +36,7 @@ void removeStaleOutputs() {
     if (std::getenv("HYPRLAND_INSTANCE_SIGNATURE") == nullptr) return;
     try {
         od::HyprlandOutputController outputs;
+        outputs.clearPersistentRules();  // left behind if the daemon crashed
         for (const auto& output : outputs.outputs()) {
             if (od::isStaleVirtualOutput(output.name, pidAlive)) {
                 od::log("Removing stale virtual monitor " + output.name);

@@ -105,8 +105,17 @@ Behavior worth knowing:
 - When the receiver drops (sleep, unplug, app closed) the service retries
   with exponential backoff until you disconnect. After a crash, systemd
   restarts it and it resumes the session that was running.
-- Hyprland config reloads (layout toggles, theme changes) no longer reset the
-  virtual monitor: the service re-applies its monitor rules after each reload.
+- Hyprland config reloads (layout toggles, theme changes) drop runtime
+  monitor rules. While a session runs, the service writes its rules to
+  `~/.local/state/opendisplay/hyprland.lua`; add this line at the end of
+  `~/.config/hypr/hyprland.lua` so reloads keep the virtual monitor's mode
+  (otherwise it flips briefly and the stream restarts):
+
+  ```lua
+  pcall(dofile, (os.getenv("XDG_STATE_HOME") or (os.getenv("HOME") .. "/.local/state")) .. "/opendisplay/hyprland.lua")
+  ```
+
+  Without the line, the service still re-applies its rules after each reload.
 - Logs: `journalctl --user -u opendisplayd -f`. The GUI's diagnostics checkbox
   enables verbose logs, including capture-to-send latency every 5 s.
 

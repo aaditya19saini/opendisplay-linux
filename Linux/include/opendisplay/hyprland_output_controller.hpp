@@ -15,6 +15,16 @@ std::string hyprlandMonitorExpression(const std::string& outputName,
                                       int transform = -1);
 std::string hyprlandFocusExpression(const std::string& outputName);
 
+/// Lua file the user's hyprland.lua can load so OpenDisplay's monitor rules
+/// survive config reloads (no mode flip, no encoder restart):
+///   pcall(dofile, "<state>/opendisplay/hyprland.lua")
+std::string hyprlandPersistentRulesPath();
+/// Contents of that file for an active session.
+std::string hyprlandPersistentRules(const std::string& outputName, const DisplayLayout& layout,
+                                    const DisplayOutput& reference);
+/// True when the user's Hyprland config loads the persistent rules file.
+bool hyprlandConfigLoadsPersistentRules();
+
 class HyprlandOutputController {
 public:
     std::vector<DisplayOutput> outputs() const;
@@ -28,6 +38,10 @@ public:
     void focus(const std::string& outputName) const;
     void remove(const std::string& outputName) const;
     void reload() const;
+    /// Writes the persistent rules file for the active session; clear removes it.
+    void writePersistentRules(const std::string& outputName, const DisplayLayout& layout,
+                              const DisplayOutput& reference) const;
+    void clearPersistentRules() const;
 
 private:
     std::string applyRule(const std::string& name, const DisplayLayout& ruleLayout,

@@ -77,6 +77,27 @@ void producesCurrentHyprlandFocusExpression() {
            == "hl.dispatch(hl.dsp.focus({ monitor = \"eDP-1\" }))");
 }
 
+void producesPersistentRulesFile() {
+    od::DisplayOutput reference;
+    reference.name = "eDP-1";
+    reference.resolution = {.width = 1920, .height = 1080};
+    reference.scale = 1.25;
+    reference.refreshRate = 144.003;
+    reference.logicalGeometry = {.x = 0, .y = 0, .width = 1536, .height = 864};
+    od::DisplayLayout layout;
+    layout.resolution = {.width = 2224, .height = 1668};
+    layout.scale = 2.0;
+    layout.refreshRate = 60;
+    layout.logicalGeometry = {.x = 1536, .y = 30, .width = 1112, .height = 834};
+    const auto rules = od::hyprlandPersistentRules("OpenDisplay-uab", layout, reference);
+    // Reference is pinned first, then the virtual output; one rule per line.
+    const auto pin = rules.find("output = \"eDP-1\", mode = \"1920x1080@144\", position = \"0x0\", scale = 1.25");
+    const auto virt = rules.find("output = \"OpenDisplay-uab\", mode = \"2224x1668@60\", position = \"1536x30\", scale = 2");
+    assert(pin != std::string::npos && virt != std::string::npos && pin < virt);
+    assert(rules.starts_with("--"));
+    assert(od::hyprlandPersistentRulesPath().ends_with("/opendisplay/hyprland.lua"));
+}
+
 }  // namespace
 
 int main() {
@@ -86,4 +107,5 @@ int main() {
     preservesReferenceTransformInMonitorExpression();
     rejectsSemanticHyprctlErrorsWithZeroExitStatus();
     producesCurrentHyprlandFocusExpression();
+    producesPersistentRulesFile();
 }

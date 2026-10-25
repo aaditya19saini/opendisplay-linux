@@ -70,6 +70,15 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
             referencePinned_ = true;
             const auto configured = outputs_.create(virtualOutputName_, layout, reference);
             inputOutputName = configured.name;
+            // Rules in a file the user's config loads survive reloads outright
+            // (no mode flip, no encoder restart); the watcher below is the
+            // fallback when the config doesn't load it.
+            outputs_.writePersistentRules(virtualOutputName_, layout, reference);
+            if (!hyprlandConfigLoadsPersistentRules()) {
+                log("Tip: add `pcall(dofile, \"" + hyprlandPersistentRulesPath()
+                    + "\")` to ~/.config/hypr/hyprland.lua so config reloads don't "
+                      "briefly reset the virtual monitor");
+            }
             // Any Hyprland config reload (layout toggles, theme changes, saving the
             // config) drops runtime monitor rules, and the virtual output then
             // falls back to the user's catch-all rule (wrong size and scale).
@@ -199,6 +208,7 @@ void HyprlandPortal::stop() {
         sessionPath_.clear();
     }
     if (outputCreated_) {
+        outputs_.clearPersistentRules();
         try {
             outputs_.remove(virtualOutputName_);
         } catch (const std::exception& error) {
