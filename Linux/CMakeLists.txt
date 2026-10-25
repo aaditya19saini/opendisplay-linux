@@ -96,10 +96,10 @@ target_compile_options(opendisplay-linux PRIVATE
 )
 
 if(NOT OPENDISPLAY_BUILD_GUI STREQUAL "OFF")
-    find_package(Qt6 6.5 QUIET COMPONENTS Quick Qml QuickControls2 Widgets)
+    find_package(Qt6 6.5 QUIET COMPONENTS Quick Qml QuickControls2 Widgets Network)
     find_package(KF6Kirigami 6.3 QUIET)
     if(TARGET Qt6::Quick AND TARGET Qt6::Qml AND TARGET Qt6::QuickControls2
-       AND TARGET Qt6::Widgets AND TARGET KF6::Kirigami)
+       AND TARGET Qt6::Widgets AND TARGET Qt6::Network AND TARGET KF6::Kirigami)
         qt_policy(SET QTP0001 NEW)
         if(Qt6_VERSION VERSION_GREATER_EQUAL "6.8")
             qt_policy(SET QTP0004 NEW)
@@ -125,6 +125,7 @@ if(NOT OPENDISPLAY_BUILD_GUI STREQUAL "OFF")
             Qt6::Qml
             Qt6::QuickControls2
             Qt6::Widgets
+            Qt6::Network
             KF6::Kirigami
         )
         target_compile_options(opendisplay-gui PRIVATE

@@ -151,12 +151,14 @@ EncoderKind FfmpegEncoder::chooseEncoder() const {
         }
         return config_.kind;
     }
+    // Prefer NVENC on NVIDIA systems: nvidia-vaapi-driver is decode-only, so
+    // VA-API on an NVIDIA render node cannot encode.
+    if (::access("/dev/nvidiactl", F_OK) == 0 && ffmpegHasEncoder("h264_nvenc")) {
+        return EncoderKind::Nvenc;
+    }
     if (::access(config_.vaapiDevice.c_str(), R_OK | W_OK) == 0
         && ffmpegHasEncoder("h264_vaapi")) {
         return EncoderKind::Vaapi;
-    }
-    if (::access("/dev/nvidiactl", F_OK) == 0 && ffmpegHasEncoder("h264_nvenc")) {
-        return EncoderKind::Nvenc;
     }
     if (ffmpegHasEncoder("libx264")) {
         return EncoderKind::Software;
