@@ -3,7 +3,7 @@ pkgver=1.14.0.r0.g0173617
 pkgrel=4
 pkgdesc="Use an iOS device as a KDE or Hyprland Wayland display"
 arch=('x86_64')
-url="https://github.com/tixwho/opendisplay-linux"
+url="https://github.com/aaditya19saini/opendisplay-linux"
 license=('GPL-3.0-only')
 depends=('qt6-base' 'qt6-declarative' 'qt6-wayland' 'kirigami' 'pipewire' 'avahi'
          'libusbmuxd' 'usbmuxd' 'ffmpeg' 'libkscreen>=6.6' 'wayland'
@@ -16,7 +16,7 @@ optdepends=('libva-mesa-driver: VA-API support for AMD GPUs'
             'xdg-desktop-portal-hyprland: Hyprland screen-cast portal')
 provides=('opendisplay-linux')
 conflicts=('opendisplay-linux')
-_giturl="https://github.com/tixwho/opendisplay-linux.git"
+_giturl="https://github.com/aaditya19saini/opendisplay-linux.git"
 _branch="linux-port"
 source=("opendisplay::git+${_giturl}#branch=${_branch}")
 sha256sums=('SKIP')

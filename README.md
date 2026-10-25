@@ -53,7 +53,8 @@ dedicated [Linux README](Linux/README.md).
 
 ## Upstream code and license
 
-The original macOS sender, iOS/iPadOS receiver, website, and shared protocol
-remain in this repository for compatibility and reference. Upstream development
-belongs at [peetzweg/opendisplay](https://github.com/peetzweg/opendisplay).
+This fork contains only the Linux sender. The macOS sender, iOS/iPadOS
+receiver, website, and Swift wire-protocol definitions live in the
+[upstream project](https://github.com/peetzweg/opendisplay), where their
+development belongs.
 This fork remains available under the repository's [GPL-3.0 license](LICENSE).

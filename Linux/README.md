@@ -56,7 +56,7 @@ ctest --test-dir build/linux --output-on-failure
 ## Build and install the Arch package
 
 The `-git` package follows the pushed `linux-port` branch on the public
-[GitHub repository](https://github.com/tixwho/opendisplay-linux). From the
+[GitHub repository](https://github.com/aaditya19saini/opendisplay-linux). From the
 repository root, use a clean package build so an older clone of `main` cannot
 remain in makepkg's `src/` directory:
 
