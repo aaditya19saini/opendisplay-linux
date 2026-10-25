@@ -294,6 +294,11 @@ void Session::switchMode(const CaptureMode mode) {
 
 void Session::setRestoreToken(std::string token) { options_.restoreToken = std::move(token); }
 
+void Session::setWorkspace(const std::string& workspace) {
+    options_.display.workspace = workspace;
+    if (pipelineRunning_ && options_.mode == CaptureMode::Extend) desktop_->setWorkspace(workspace);
+}
+
 std::string Session::restoreToken() const {
     std::lock_guard lock(statsMutex_);
     return restoreToken_;

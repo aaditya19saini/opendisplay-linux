@@ -90,6 +90,21 @@ void roundTripsState() {
         {QStringLiteral("settings"), QJsonObject{{QStringLiteral("mode"), QStringLiteral("mirror")}}}});
     assert(!legacy.settings.contains(QStringLiteral("mode")));
     od::optionsFromSettings(empty.settings);  // defaults must validate
+
+    // Workspace setting: auto/empty, dedicated, or 1-99.
+    auto settings = od::defaultSettings();
+    for (const auto* good : {"", "auto", "dedicated", "1", "42"}) {
+        settings.insert(QStringLiteral("workspace"), QString::fromLatin1(good));
+        od::optionsFromSettings(settings);
+    }
+    settings.insert(QStringLiteral("workspace"), QStringLiteral("auto"));
+    assert(od::optionsFromSettings(settings).display.workspace.empty());
+    for (const auto* bad : {"0", "100", "name:x", "5; rm", "\""}) {
+        settings.insert(QStringLiteral("workspace"), QString::fromLatin1(bad));
+        bool threw = false;
+        try { od::optionsFromSettings(settings); } catch (const std::exception&) { threw = true; }
+        assert(threw);
+    }
 }
 
 void framesControlMessages() {

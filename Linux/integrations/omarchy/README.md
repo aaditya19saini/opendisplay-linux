@@ -5,7 +5,9 @@
 made from the GUI, the CLI, or other bars instantly.
 
 - **Left click**: popup with status, device, live latency, Extend/Mirror,
-  position (left/right/top/bottom), Connect/Disconnect and Autoconnect.
+  position (left/right/top/bottom), the workspace shown on the display
+  (Auto, Dedicated, or 1-9; applied live, and returned to the laptop screen
+  when changed or disconnected), Connect/Disconnect and Autoconnect.
 - **Right click**: switch between extend and mirror (live, no reconnect).
 - **Middle click**: connect or disconnect.
 - Icon: dim tablet when idle, pulsing while connecting or retrying, accent

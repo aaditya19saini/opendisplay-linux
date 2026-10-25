@@ -89,6 +89,7 @@ opendisplayctl watch           # follow state and latency stats
 opendisplayctl disconnect
 opendisplayctl devices
 opendisplayctl set encoder=nvenc fps=60 extendTo=left
+opendisplayctl set workspace=dedicated   # or a number (moves it there), or auto
 opendisplayctl autoconnect on  # reconnect when the service starts
 opendisplay-gui
 ```

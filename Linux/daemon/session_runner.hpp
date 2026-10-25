@@ -31,6 +31,7 @@ public slots:
     void start(od::Options options, QVariantMap restoreTokens);
     void stop();
     void switchMode(int mode);
+    void setWorkspace(const QString& workspace);
 
 signals:
     void connecting(const QString& detail);

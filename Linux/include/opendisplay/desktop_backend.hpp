@@ -43,6 +43,9 @@ public:
     virtual void stop() = 0;
     virtual void pointer(std::string_view phase, double normalizedX, double normalizedY) = 0;
     virtual void scroll(double dx, double dy) = 0;
+    /// Changes which workspace the virtual output shows, live (see
+    /// DisplayOptions::workspace). Backends without workspaces ignore it.
+    virtual void setWorkspace(const std::string& /*workspace*/) {}
 };
 
 }  // namespace od

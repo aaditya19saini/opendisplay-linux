@@ -44,6 +44,8 @@ public:
     /// connection (rebuilds only the capture pipeline).
     void switchMode(CaptureMode mode);
     void setRestoreToken(std::string token);
+    /// Changes the workspace shown on the virtual output (extend mode).
+    void setWorkspace(const std::string& workspace);
     /// Most recent restore token issued by the portal (empty if none).
     [[nodiscard]] std::string restoreToken() const;
     [[nodiscard]] std::optional<PhoneInfo> receiver() const;

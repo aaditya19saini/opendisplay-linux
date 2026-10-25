@@ -96,6 +96,21 @@ void producesPersistentRulesFile() {
     assert(pin != std::string::npos && virt != std::string::npos && pin < virt);
     assert(rules.starts_with("--"));
     assert(od::hyprlandPersistentRulesPath().ends_with("/opendisplay/hyprland.lua"));
+    assert(rules.find("workspace_rule") == std::string::npos);
+
+    const auto withWorkspace = od::hyprlandPersistentRules("OpenDisplay-uab", layout, reference, "5");
+    assert(withWorkspace.find("hl.workspace_rule({ workspace = \"5\", monitor = \"OpenDisplay-uab\", default = true })")
+           > withWorkspace.find("OpenDisplay-uab\", mode"));
+}
+
+void mapsWorkspaceSettings() {
+    assert(od::hyprlandWorkspaceId("", "iPad").empty());
+    assert(od::hyprlandWorkspaceId("7", "iPad") == "7");
+    assert(od::hyprlandWorkspaceId("dedicated", "iPad") == "name:iPad");
+    assert(od::hyprlandWorkspaceId("dedicated", "Aaditya's iPad Pro") == "name:AadityasiPadPro");
+    assert(od::hyprlandWorkspaceId("dedicated", "'\"") == "name:OpenDisplay");
+    assert(od::hyprlandMoveWorkspaceExpression("name:iPad", "eDP-1")
+           == "hl.dispatch(hl.dsp.workspace.move({ workspace = \"name:iPad\", monitor = \"eDP-1\" }))");
 }
 
 }  // namespace
@@ -108,4 +123,5 @@ int main() {
     rejectsSemanticHyprctlErrorsWithZeroExitStatus();
     producesCurrentHyprlandFocusExpression();
     producesPersistentRulesFile();
+    mapsWorkspaceSettings();
 }

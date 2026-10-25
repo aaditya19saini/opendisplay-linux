@@ -85,6 +85,14 @@ Size pixelSize(const QString& value) {
     return result;
 }
 
+std::string workspaceSetting(const QString& value) {
+    if (value.isEmpty() || value == QStringLiteral("auto")) return {};
+    if (value == QStringLiteral("dedicated")) return value.toStdString();
+    static const QRegularExpression number(QStringLiteral("^[1-9][0-9]?$"));
+    if (number.match(value).hasMatch()) return value.toStdString();
+    throw std::runtime_error("Workspace must be auto, dedicated, or a number from 1 to 99.");
+}
+
 }  // namespace
 
 Options optionsFromSettings(const QVariantMap& values) {
@@ -98,6 +106,7 @@ Options optionsFromSettings(const QVariantMap& values) {
     options.display.referenceMonitor = text(values, "referenceMonitor").toStdString();
     options.display.extendTo = extendDirection(text(values, "extendTo", "right"));
     options.display.alignTo = alignDirection(text(values, "alignTo", "bottom"));
+    options.display.workspace = workspaceSetting(text(values, "workspace"));
     options.fps = values.value(QStringLiteral("fps"), 60).toInt();
     const double bitrateMbps = values.value(QStringLiteral("bitrateMbps"), 18.0).toDouble();
     options.bitrate = static_cast<int>(std::lround(bitrateMbps * 1'000'000.0));

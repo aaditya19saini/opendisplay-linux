@@ -110,6 +110,19 @@ void SessionRunner::switchMode(const int mode) {
     runDeferred();
 }
 
+void SessionRunner::setWorkspace(const QString& workspace) {
+    options_.display.workspace = workspace.toStdString();
+    if (!session_ || busy_) return;  // applied at the next start / after the switch
+    busy_ = true;
+    try {
+        session_->setWorkspace(options_.display.workspace);
+    } catch (const std::exception& error) {
+        od::log(std::string("Cannot change workspace: ") + error.what());
+    }
+    busy_ = false;
+    runDeferred();
+}
+
 void SessionRunner::runDeferred() {
     if (stopRequested_) {
         stopRequested_ = false;

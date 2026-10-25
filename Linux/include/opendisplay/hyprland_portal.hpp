@@ -8,6 +8,8 @@
 
 #include <QObject>
 
+#include <mutex>
+
 #include <string>
 #include <string_view>
 
@@ -24,6 +26,7 @@ public:
     void stop() override;
     void pointer(std::string_view phase, double normalizedX, double normalizedY) override;
     void scroll(double dx, double dy) override;
+    void setWorkspace(const std::string& workspace) override;
 
 private:
     XdgPortal portal_;
@@ -32,6 +35,12 @@ private:
     WaylandVirtualPointer pointer_;
     QString sessionPath_;
     std::string virtualOutputName_;
+    // Active extend session, for live workspace changes and rule rewrites.
+    DisplayOutput reference_;
+    DisplayLayout layout_;
+    std::string receiverName_;
+    mutable std::mutex workspaceMutex_;
+    std::string workspaceId_;
     bool outputCreated_ = false;
     bool referencePinned_ = false;
     bool inputEnabled_ = false;

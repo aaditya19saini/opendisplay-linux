@@ -243,6 +243,42 @@ BarWidget {
         }
       }
 
+      Text {
+        visible: root.display !== null && root.display.mode === "extend"
+        textFormat: Text.PlainText
+        text: "Workspace on the display"
+        color: root.dim
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      ButtonGroup {
+        visible: root.display !== null && root.display.mode === "extend"
+        focusable: false
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
+        value: {
+          var current = root.display ? String(root.display.settings.workspace || "") : ""
+          return current === "" || current === "auto" ? "auto" : (current === "dedicated" ? "dedicated" : "")
+        }
+        options: [
+          { value: "auto", label: "Auto", tooltip: "Let Hyprland choose" },
+          { value: "dedicated", label: "Dedicated", tooltip: "A workspace of its own, named after the device" }
+        ]
+        onChanged: function(value) { if (root.display) root.display.setSettings({ workspace: value }) }
+      }
+
+      ButtonGroup {
+        visible: root.display !== null && root.display.mode === "extend"
+        focusable: false
+        spacing: Style.space(4)
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
+        value: root.display ? String(root.display.settings.workspace || "") : ""
+        options: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        onChanged: function(value) { if (root.display) root.display.setSettings({ workspace: value }) }
+      }
+
       PanelSeparator { width: parent.width }
 
       Row {

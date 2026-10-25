@@ -68,12 +68,21 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
             }
             outputCreated_ = true;
             referencePinned_ = true;
+            reference_ = reference;
+            layout_ = layout;
+            receiverName_ = request.receiver.device;
+            const auto workspaceId = hyprlandWorkspaceId(request.display.workspace, receiverName_);
+            {
+                std::lock_guard lock(workspaceMutex_);
+                workspaceId_ = workspaceId;
+            }
             const auto configured = outputs_.create(virtualOutputName_, layout, reference);
             inputOutputName = configured.name;
+            outputs_.placeWorkspace(workspaceId, virtualOutputName_);
             // Rules in a file the user's config loads survive reloads outright
             // (no mode flip, no encoder restart); the watcher below is the
             // fallback when the config doesn't load it.
-            outputs_.writePersistentRules(virtualOutputName_, layout, reference);
+            outputs_.writePersistentRules(virtualOutputName_, layout, reference, workspaceId);
             if (!hyprlandConfigLoadsPersistentRules()) {
                 log("Tip: add `pcall(dofile, \"" + hyprlandPersistentRulesPath()
                     + "\")` to ~/.config/hypr/hyprland.lua so config reloads don't "
@@ -89,6 +98,14 @@ PortalCapture HyprlandPortal::start(const DesktopRequest& request) {
                     if (event.name == "configreloaded") {
                         try {
                             outputs_.reapply(name, layout, reference);
+                            std::string workspace;
+                            {
+                                std::lock_guard lock(workspaceMutex_);
+                                workspace = workspaceId_;
+                            }
+                            if (!workspace.empty()) {
+                                outputs_.placeWorkspace(workspace, name);
+                            }
                         } catch (const std::exception& error) {
                             log(std::string("Cannot re-apply monitor rules after a "
                                             "Hyprland reload: ") + error.what());
@@ -231,6 +248,27 @@ void HyprlandPortal::stop() {
         }
     }
     referencePinned_ = false;
+}
+
+void HyprlandPortal::setWorkspace(const std::string& workspace) {
+    if (!outputCreated_) return;
+    const auto next = hyprlandWorkspaceId(workspace, receiverName_);
+    std::string previous;
+    {
+        std::lock_guard lock(workspaceMutex_);
+        previous = workspaceId_;
+        workspaceId_ = next;
+    }
+    if (next == previous) return;
+    // Send the old choice back to the laptop screen, then bring the new one.
+    if (!previous.empty()) outputs_.moveWorkspace(previous, reference_.name);
+    outputs_.placeWorkspace(next, virtualOutputName_);
+    outputs_.writePersistentRules(virtualOutputName_, layout_, reference_, next);
+    try {
+        outputs_.focus(reference_.name);
+    } catch (const std::exception& error) {
+        debug(std::string("Cannot refocus the reference monitor: ") + error.what());
+    }
 }
 
 void HyprlandPortal::pointer(const std::string_view phase, const double normalizedX,

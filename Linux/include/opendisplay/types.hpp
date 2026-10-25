@@ -42,6 +42,9 @@ struct DisplayOptions {
     std::optional<PhysicalSize> referencePhysicalSize;
     std::optional<PhysicalSize> receiverPhysicalSize;
     std::optional<int> refreshRate;
+    /// Workspace shown on the virtual output: empty (compositor default),
+    /// "dedicated" (a named workspace for the receiver), or a number.
+    std::string workspace;
 };
 
 struct PhoneInfo {

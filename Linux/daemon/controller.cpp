@@ -164,7 +164,13 @@ QString Controller::toggleMode() {
 
 QString Controller::updateSettings(const QJsonObject& settings,
                                    const std::optional<bool> autoconnect) {
+    const auto previousWorkspace = persisted_.settings.value(QStringLiteral("workspace")).toString();
     if (auto error = mergeSettings(settings); !error.isEmpty()) return error;
+    const auto workspace = persisted_.settings.value(QStringLiteral("workspace")).toString();
+    if (workspace != previousWorkspace && status_ == Status::Streaming) {
+        QMetaObject::invokeMethod(runner_, "setWorkspace", Qt::QueuedConnection,
+                                  Q_ARG(QString, workspace == QStringLiteral("auto") ? QString() : workspace));
+    }
     if (autoconnect) persisted_.autoconnect = *autoconnect;
     if (const auto mode = parseCaptureMode(settings.value(QStringLiteral("mode")).toString())) {
         persisted_.mode = *mode;
