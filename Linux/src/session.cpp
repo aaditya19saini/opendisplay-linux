@@ -7,6 +7,7 @@
 #include <QJsonObject>
 
 #include <algorithm>
+#include <cerrno>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -28,6 +29,15 @@ Session::~Session() { stop(); }
 
 void Session::start(const Endpoint& endpoint) {
     stop();
+    // Only one session per user: a second one would create another virtual
+    // monitor and fight over the receiver.
+    std::string holder;
+    if (!lock_.acquire(program_invocation_short_name, &holder)) {
+        throw std::runtime_error(
+            "another OpenDisplay session is already running: " + holder
+            + ". Control it with `opendisplayctl`, or stop it with `opendisplayctl disconnect` "
+              "(or close that program) first");
+    }
     if (endpoint.kind == TransportKind::Usb) {
         log("Connecting through usbmuxd to " + endpoint.udid + "…");
         socket_ = connectUsb(endpoint.usbHandle, endpoint.port);
@@ -334,6 +344,7 @@ void Session::stop() {
         events_.clear();
     }
     reconfigurePending_ = false;
+    lock_.release();
 }
 
 }  // namespace od

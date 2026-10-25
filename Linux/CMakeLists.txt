@@ -61,6 +61,7 @@ set(OPENDISPLAY_CORE_SOURCES
     src/pipewire_format.cpp
     src/daemon_support.cpp
     src/session.cpp
+    src/session_lock.cpp
     src/settings.cpp
     src/socket.cpp
     src/wire.cpp
@@ -237,6 +238,14 @@ if(BUILD_TESTING)
     target_compile_options(opendisplay-encoder-tests PRIVATE -UNDEBUG)
     add_test(NAME encoder COMMAND opendisplay-encoder-tests)
     set_tests_properties(encoder PROPERTIES TIMEOUT 15)
+
+    add_executable(opendisplay-session-lock-tests
+        tests/session_lock_tests.cpp
+        src/session_lock.cpp
+    )
+    target_include_directories(opendisplay-session-lock-tests PRIVATE include)
+    target_compile_options(opendisplay-session-lock-tests PRIVATE -UNDEBUG)
+    add_test(NAME session-lock COMMAND opendisplay-session-lock-tests)
 
     add_executable(opendisplay-hyprland-events-tests
         tests/hyprland_events_tests.cpp

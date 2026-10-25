@@ -103,6 +103,11 @@ Behavior worth knowing:
   (`OpenDisplay-u<udid>` for USB) so the token keeps matching.
 - Switching between extend and mirror rebuilds only the capture pipeline; the
   receiver stays connected.
+- Only one session runs at a time, whichever program starts it. A second
+  attempt (for example the standalone CLI while the service is streaming)
+  fails immediately and names the running session. The lock
+  (`$XDG_RUNTIME_DIR/opendisplay/session.lock`) is a kernel file lock, so a
+  crashed session never leaves it stuck.
 - When the receiver drops (sleep, unplug, app closed) the service retries
   with exponential backoff until you disconnect. After a crash, systemd
   restarts it and it resumes the session that was running.

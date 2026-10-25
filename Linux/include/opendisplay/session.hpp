@@ -4,6 +4,7 @@
 #include "opendisplay/video_encoder.hpp"
 #include "opendisplay/latency_stats.hpp"
 #include "opendisplay/pipewire_capture.hpp"
+#include "opendisplay/session_lock.hpp"
 #include "opendisplay/socket.hpp"
 #include "opendisplay/types.hpp"
 
@@ -70,6 +71,7 @@ private:
     void queue(Event event);
 
     Options options_;
+    SessionLock lock_;
     Socket socket_;
     std::unique_ptr<DesktopBackend> desktop_;
     PipeWireCapture capture_;
